@@ -225,7 +225,7 @@ void DrawFVG(int index)
 void UpdateAllFVG(const double &high[], const double &low[], const datetime &time[])
 {
    datetime current_time = time[0];
-   int bars_to_check = 200; // Số nến quét lại để kiểm tra mitigation
+   int total_bars = ArraySize(time);
 
    for(int i = 0; i < fvg_count; i++)
    {
@@ -241,11 +241,23 @@ void UpdateAllFVG(const double &high[], const double &low[], const datetime &tim
 
       if(fvg_list[i].is_bullish)
       {
-         // Bullish FVG - quét các nến để tìm mức low thấp nhất đã chạm vào FVG
+         // Bullish FVG - quét các nến SAU KHI FVG được tạo để tìm mức low thấp nhất đã chạm vào FVG
          double lowest_mitigation = fvg_list[i].original_top; // Bắt đầu từ top
 
-         for(int bar = 0; bar < bars_to_check; bar++)
+         // Quét từ nến hiện tại (bar 0) cho đến khi gặp nến có time <= time_start của FVG
+         for(int bar = 0; bar < total_bars; bar++)
          {
+            // Chỉ kiểm tra các nến SAU KHI FVG được tạo
+            if(time[bar] < fvg_list[i].time_start)
+               break; // Đã quét hết các nến sau khi FVG tạo, dừng lại
+
+            // Kiểm tra phá vỡ: giá phá xuống dưới bottom ban đầu
+            if(low[bar] < fvg_list[i].original_bottom)
+            {
+               need_delete = true;
+               break;
+            }
+
             // Kiểm tra xem nến này có chạm vào vùng FVG không
             if(low[bar] <= fvg_list[i].original_top && low[bar] >= fvg_list[i].original_bottom)
             {
@@ -255,13 +267,6 @@ void UpdateAllFVG(const double &high[], const double &low[], const datetime &tim
                   lowest_mitigation = low[bar];
                   need_update = true;
                }
-            }
-
-            // Kiểm tra phá vỡ: giá phá xuống dưới bottom ban đầu
-            if(low[bar] < fvg_list[i].original_bottom)
-            {
-               need_delete = true;
-               break;
             }
          }
 
@@ -273,11 +278,23 @@ void UpdateAllFVG(const double &high[], const double &low[], const datetime &tim
       }
       else
       {
-         // Bearish FVG - quét các nến để tìm mức high cao nhất đã chạm vào FVG
+         // Bearish FVG - quét các nến SAU KHI FVG được tạo để tìm mức high cao nhất đã chạm vào FVG
          double highest_mitigation = fvg_list[i].original_bottom; // Bắt đầu từ bottom
 
-         for(int bar = 0; bar < bars_to_check; bar++)
+         // Quét từ nến hiện tại (bar 0) cho đến khi gặp nến có time <= time_start của FVG
+         for(int bar = 0; bar < total_bars; bar++)
          {
+            // Chỉ kiểm tra các nến SAU KHI FVG được tạo
+            if(time[bar] < fvg_list[i].time_start)
+               break; // Đã quét hết các nến sau khi FVG tạo, dừng lại
+
+            // Kiểm tra phá vỡ: giá phá lên trên top ban đầu
+            if(high[bar] > fvg_list[i].original_top)
+            {
+               need_delete = true;
+               break;
+            }
+
             // Kiểm tra xem nến này có chạm vào vùng FVG không
             if(high[bar] >= fvg_list[i].original_bottom && high[bar] <= fvg_list[i].original_top)
             {
@@ -287,13 +304,6 @@ void UpdateAllFVG(const double &high[], const double &low[], const datetime &tim
                   highest_mitigation = high[bar];
                   need_update = true;
                }
-            }
-
-            // Kiểm tra phá vỡ: giá phá lên trên top ban đầu
-            if(high[bar] > fvg_list[i].original_top)
-            {
-               need_delete = true;
-               break;
             }
          }
 
