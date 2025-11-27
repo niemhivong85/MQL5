@@ -53,6 +53,7 @@ void DrawHorizontalLine(double price, datetime time_start, datetime time_end, st
 void MarkZigZagPoint(int bar_index, double price, datetime bar_time, bool is_high, double prev_price, bool prev_is_high);
 void SendZigZagAlert(double price, bool is_high, double percent_change);
 int CountZigZagPoints();
+void BuildZigZagFromStart(int rates_total, const datetime &time[], const double &high[], const double &low[], const double &close[]);
 //+------------------------------------------------------------------+
 int OnInit() {
    pending_HighLow = 0;
@@ -215,169 +216,13 @@ int OnCalculate(const int rates_total,
    }
    // ======= HẾT PHẦN MỚI =======
    
-   if(prev_calculated != 0)
-      start = prev_calculated - 1;
-
-   for(int i = start; i < rates_total; i++) {
-      Buffer_High[i] = 0;
-      Buffer_Low[i] = 0;
-
-      if(pending_HighLow == 0) {
-         if(high[i] > high[i - 1] && low[i] > low[i - 1]) {
-            pending_index = i;
-            pending_HighLow = 1;
-
-            Buffer_High[i] = high[pending_index];
-            Buffer_Low[0] = low[0];
-            continue;
-         }
-         if(high[i] < high[i - 1] && low[i] < low[i - 1]) {
-            pending_index = i;
-            pending_HighLow = -1;
-
-            Buffer_High[0] = high[0];
-            Buffer_Low[i] = low[pending_index];
-            continue;
-         }
-      }
-
-      else if(pending_HighLow == 1) {
-         if(high[i] > high[pending_index] && low[i] < low[pending_index]) {
-            // Đánh dấu điểm đỉnh cũ
-            if(Show_Price_Labels && Buffer_High[pending_index] > 0) {
-               datetime prev_time = iTime(_Symbol, Timeframe, pending_index);
-               MarkZigZagPoint(pending_index, high[pending_index], prev_time, true, last_zigzag_price, last_zigzag_is_high);
-               last_zigzag_price = high[pending_index];
-               last_zigzag_is_high = true;
-            }
-            
-            Buffer_High[pending_index] = high[pending_index];
-
-            Buffer_Low[i] = low[i];
-            Buffer_High[i] = high[i];
-            if(i < rates_total - 1) {
-               pending_index = i;
-               pending_HighLow = 1;
-            }
-            
-            // Cảnh báo điểm mới
-            if(Enable_Alerts && i == rates_total - 1) {
-               double percent_change = 0;
-               if(last_zigzag_price > 0) {
-                  percent_change = MathAbs((high[i] - last_zigzag_price) / last_zigzag_price) * 100;
-               }
-               if(percent_change >= Min_Percent_Alert) {
-                  SendZigZagAlert(high[i], true, percent_change);
-               }
-            }
-            continue;
-         }
-
-         else if(high[i] > high[pending_index] && low[i] > low[pending_index]) {
-            Buffer_High[pending_index] = 0;
-            if(i < rates_total - 1) {
-               pending_index = i;
-               pending_HighLow = 1;
-            }
-
-            Buffer_High[i] = high[i];
-            continue;
-         }
-
-         else if(high[i] < high[pending_index] && low[i] < low[pending_index]) { 
-            // Đánh dấu điểm đáy mới
-            if(Show_Price_Labels) {
-               datetime low_time = iTime(_Symbol, Timeframe, i);
-               MarkZigZagPoint(i, low[i], low_time, false, last_zigzag_price, last_zigzag_is_high);
-               double percent_change = 0;
-               if(last_zigzag_price > 0) {
-                  percent_change = MathAbs((low[i] - last_zigzag_price) / last_zigzag_price) * 100;
-               }
-               last_zigzag_price = low[i];
-               last_zigzag_is_high = false;
-               
-               // Cảnh báo điểm mới
-               if(Enable_Alerts && i == rates_total - 1 && percent_change >= Min_Percent_Alert) {
-                  SendZigZagAlert(low[i], false, percent_change);
-               }
-            }
-            
-            if(i < rates_total - 1) {
-               pending_index = i;
-               pending_HighLow = -1;
-            }
-
-            Buffer_Low[i] = low[i];
-            continue;
-         }
-      }
-      else  if(pending_HighLow == -1) {
-         if(high[i] > high[pending_index] && low[i] < low[pending_index]) { 
-            // Đánh dấu điểm đáy cũ
-            if(Show_Price_Labels && Buffer_Low[pending_index] > 0) {
-               datetime prev_time = iTime(_Symbol, Timeframe, pending_index);
-               MarkZigZagPoint(pending_index, low[pending_index], prev_time, false, last_zigzag_price, last_zigzag_is_high);
-               last_zigzag_price = low[pending_index];
-               last_zigzag_is_high = false;
-            }
-            
-            Buffer_Low[pending_index] = low[pending_index];
-            Buffer_High[i] = high[i];
-            Buffer_Low[i] = low[i];
-            if(i < rates_total - 1) {
-               pending_index = i;
-               pending_HighLow = -1;
-            }
-            
-            // Cảnh báo điểm mới
-            if(Enable_Alerts && i == rates_total - 1) {
-               double percent_change = 0;
-               if(last_zigzag_price > 0) {
-                  percent_change = MathAbs((high[i] - last_zigzag_price) / last_zigzag_price) * 100;
-               }
-               if(percent_change >= Min_Percent_Alert) {
-                  SendZigZagAlert(high[i], true, percent_change);
-               }
-            }
-            continue;
-         }
-
-         else if(low[i] < low[pending_index] && high[i] < high[pending_index]) { 
-            Buffer_Low[pending_index] = 0;
-            if(i < rates_total - 1) {
-               pending_index = i;
-               pending_HighLow = -1;
-            }
-            Buffer_Low[i] = low[i];
-            continue;
-         }
-
-         else if(high[i] > high[pending_index] && low[i] > low[pending_index]) { 
-            // Đánh dấu điểm đỉnh mới
-            if(Show_Price_Labels) {
-               datetime high_time = iTime(_Symbol, Timeframe, i);
-               MarkZigZagPoint(i, high[i], high_time, true, last_zigzag_price, last_zigzag_is_high);
-               double percent_change = 0;
-               if(last_zigzag_price > 0) {
-                  percent_change = MathAbs((high[i] - last_zigzag_price) / last_zigzag_price) * 100;
-               }
-               last_zigzag_price = high[i];
-               last_zigzag_is_high = true;
-               
-               // Cảnh báo điểm mới
-               if(Enable_Alerts && i == rates_total - 1 && percent_change >= Min_Percent_Alert) {
-                  SendZigZagAlert(high[i], true, percent_change);
-               }
-            }
-            
-            if(i < rates_total - 1) {
-               pending_index = i;
-               pending_HighLow = 1;
-            }
-            Buffer_High[i] = high[i];
-            continue;
-         }
-      }
+   // Xóa buffer trước
+   ArrayInitialize(Buffer_High, 0);
+   ArrayInitialize(Buffer_Low, 0);
+   
+   // Nếu đã tìm được điểm START, xây dựng ZigZag từ điểm đó
+   if(start_bar_index >= 0 && already_found) {
+      BuildZigZagFromStart(rates_total, time, high, low, close);
    }
 //---
    return(rates_total);
@@ -445,5 +290,201 @@ void DrawHorizontalLine(double price, datetime time_start, datetime time_end, st
       ObjectSetInteger(0, text_name, OBJPROP_BACK, false);
       ObjectSetInteger(0, text_name, OBJPROP_SELECTABLE, false);
    }
+}
+//+------------------------------------------------------------------+
+//| Đánh dấu điểm ZigZag với giá và % thay đổi                      |
+//+------------------------------------------------------------------+
+void MarkZigZagPoint(int bar_index, double price, datetime bar_time, bool is_high, double prev_price, bool prev_is_high) {
+   string name = prefix + "ZZPoint_" + IntegerToString(bar_index);
+   
+   // Xóa điểm cũ nếu có
+   if(ObjectFind(0, name) >= 0)
+      ObjectDelete(0, name);
+   
+   // Tạo mũi tên đánh dấu
+   if(ObjectCreate(0, name, OBJ_ARROW, 0, bar_time, price)) {
+      ObjectSetInteger(0, name, OBJPROP_COLOR, is_high ? clrLime : clrRed);
+      ObjectSetInteger(0, name, OBJPROP_ARROWCODE, is_high ? 233 : 234);
+      ObjectSetInteger(0, name, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, name, OBJPROP_BACK, false);
+      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, false);
+   }
+   
+   // Tạo nhãn giá
+   if(Show_Price_Labels) {
+      string text_name = name + "_Label";
+      if(ObjectFind(0, text_name) >= 0)
+         ObjectDelete(0, text_name);
+      
+      string label_text = DoubleToString(price, _Digits);
+      
+      // Thêm % thay đổi nếu có
+      if(Show_Percent_Change && prev_price > 0) {
+         double percent_change = 0;
+         if(is_high && !prev_is_high) {
+            // Từ đáy lên đỉnh
+            percent_change = ((price - prev_price) / prev_price) * 100;
+         } else if(!is_high && prev_is_high) {
+            // Từ đỉnh xuống đáy
+            percent_change = ((prev_price - price) / prev_price) * 100;
+         }
+         
+         if(percent_change > 0) {
+            label_text += " (" + DoubleToString(percent_change, 2) + "%)";
+         }
+      }
+      
+      if(ObjectCreate(0, text_name, OBJ_TEXT, 0, bar_time, price)) {
+         ObjectSetString(0, text_name, OBJPROP_TEXT, label_text);
+         ObjectSetInteger(0, text_name, OBJPROP_COLOR, is_high ? clrLime : clrRed);
+         ObjectSetInteger(0, text_name, OBJPROP_FONTSIZE, 8);
+         ObjectSetInteger(0, text_name, OBJPROP_ANCHOR, is_high ? ANCHOR_LOWER : ANCHOR_UPPER);
+         ObjectSetInteger(0, text_name, OBJPROP_BACK, false);
+         ObjectSetInteger(0, text_name, OBJPROP_SELECTABLE, false);
+      }
+   }
+}
+//+------------------------------------------------------------------+
+//| Gửi cảnh báo khi có điểm ZigZag mới                              |
+//+------------------------------------------------------------------+
+void SendZigZagAlert(double price, bool is_high, double percent_change) {
+   string message = StringFormat("ZigZag %s mới: %s | Giá: %s | Thay đổi: %.2f%%",
+                                 is_high ? "ĐỈNH" : "ĐÁY",
+                                 _Symbol,
+                                 DoubleToString(price, _Digits),
+                                 percent_change);
+   
+   Alert(message);
+   Print("🔔 ", message);
+   
+   // Gửi thông báo push nếu có
+   SendNotification(message);
+}
+//+------------------------------------------------------------------+
+//| Đếm số điểm ZigZag hiện tại                                      |
+//+------------------------------------------------------------------+
+int CountZigZagPoints() {
+   int count = 0;
+   
+   // Đếm số object điểm ZigZag
+   int total = ObjectsTotal(0);
+   for(int i = 0; i < total; i++) {
+      string name = ObjectName(0, i);
+      if(StringFind(name, prefix + "ZZPoint_") >= 0) {
+         count++;
+      }
+   }
+   
+   return count;
+}
+//+------------------------------------------------------------------+
+//| Xây dựng ZigZag từ điểm START sang phải (quá khứ)               |
+//| Logic: Nếu START là đáy -> tìm đỉnh cao dần (close vượt đỉnh trước) |
+//|        Nếu START là đỉnh -> tìm đáy thấp dần (close vượt đáy trước) |
+//+------------------------------------------------------------------+
+void BuildZigZagFromStart(int rates_total, const datetime &time[], const double &high[], const double &low[], const double &close[]) {
+   if(start_bar_index < 0) return;
+   
+   // Xác định điểm START là đỉnh hay đáy
+   bool start_is_high = (pending_HighLow == -1);
+   double start_price = 0;
+   
+   if(start_is_high) {
+      start_price = iHigh(_Symbol, Timeframe, start_bar_index);
+      Buffer_High[start_bar_index] = start_price;
+      Print("🚀 BẮT ĐẦU TỪ ĐỈNH: Bar ", start_bar_index, " | Giá: ", DoubleToString(start_price, _Digits));
+   } else {
+      start_price = iLow(_Symbol, Timeframe, start_bar_index);
+      Buffer_Low[start_bar_index] = start_price;
+      Print("🚀 BẮT ĐẦU TỪ ĐÁY: Bar ", start_bar_index, " | Giá: ", DoubleToString(start_price, _Digits));
+   }
+   
+   // Quét từ START về quá khứ (sang phải)
+   double last_zigzag_price = start_price;
+   bool last_is_high = start_is_high;
+   int last_zigzag_bar = start_bar_index;
+   
+   // Tìm điểm cuối cùng trong khoảng LookBack_Bars
+   int end_bar = start_bar_index + LookBack_Bars;
+   if(end_bar >= rates_total) end_bar = rates_total - 1;
+   
+   // Nếu START là ĐÁY -> tìm các ĐỈNH cao dần
+   if(!start_is_high) {
+      Print("📈 TÌM CÁC ĐỈNH CAO DẦN TỪ ĐÁY...");
+      
+      for(int i = start_bar_index + 1; i <= end_bar; i++) {
+         // Tìm đỉnh cao hơn đỉnh trước
+         double bar_high = high[i];
+         double bar_close = close[i];
+         
+         // Đỉnh mới phải cao hơn đỉnh trước VÀ có nến đóng vượt qua đỉnh trước
+         if(bar_high > last_zigzag_price && bar_close > last_zigzag_price) {
+            // Xóa đỉnh cũ nếu có
+            if(last_is_high && last_zigzag_bar != start_bar_index) {
+               Buffer_High[last_zigzag_bar] = 0;
+            }
+            
+            // Đánh dấu đỉnh mới
+            Buffer_High[i] = bar_high;
+            
+            // Đánh dấu điểm ZigZag
+            if(Show_Price_Labels) {
+               datetime high_time = time[i];
+               double percent_change = ((bar_high - last_zigzag_price) / last_zigzag_price) * 100;
+               MarkZigZagPoint(i, bar_high, high_time, true, last_zigzag_price, last_is_high);
+               
+               if(Enable_Alerts && percent_change >= Min_Percent_Alert) {
+                  SendZigZagAlert(bar_high, true, percent_change);
+               }
+            }
+            
+            last_zigzag_price = bar_high;
+            last_is_high = true;
+            last_zigzag_bar = i;
+            
+            Print("  ✅ ĐỈNH MỚI: Bar ", i, " | Giá: ", DoubleToString(bar_high, _Digits), " | Close: ", DoubleToString(bar_close, _Digits));
+         }
+      }
+   }
+   // Nếu START là ĐỈNH -> tìm các ĐÁY thấp dần
+   else {
+      Print("📉 TÌM CÁC ĐÁY THẤP DẦN TỪ ĐỈNH...");
+      
+      for(int i = start_bar_index + 1; i <= end_bar; i++) {
+         // Tìm đáy thấp hơn đáy trước
+         double bar_low = low[i];
+         double bar_close = close[i];
+         
+         // Đáy mới phải thấp hơn đáy trước VÀ có nến đóng vượt qua đáy trước
+         if(bar_low < last_zigzag_price && bar_close < last_zigzag_price) {
+            // Xóa đáy cũ nếu có
+            if(!last_is_high && last_zigzag_bar != start_bar_index) {
+               Buffer_Low[last_zigzag_bar] = 0;
+            }
+            
+            // Đánh dấu đáy mới
+            Buffer_Low[i] = bar_low;
+            
+            // Đánh dấu điểm ZigZag
+            if(Show_Price_Labels) {
+               datetime low_time = time[i];
+               double percent_change = ((last_zigzag_price - bar_low) / last_zigzag_price) * 100;
+               MarkZigZagPoint(i, bar_low, low_time, false, last_zigzag_price, last_is_high);
+               
+               if(Enable_Alerts && percent_change >= Min_Percent_Alert) {
+                  SendZigZagAlert(bar_low, false, percent_change);
+               }
+            }
+            
+            last_zigzag_price = bar_low;
+            last_is_high = false;
+            last_zigzag_bar = i;
+            
+            Print("  ✅ ĐÁY MỚI: Bar ", i, " | Giá: ", DoubleToString(bar_low, _Digits), " | Close: ", DoubleToString(bar_close, _Digits));
+         }
+      }
+   }
+   
+   Print("✅ HOÀN THÀNH XÂY DỰNG ZIGZAG");
 }
 //+------------------------------------------------------------------+
