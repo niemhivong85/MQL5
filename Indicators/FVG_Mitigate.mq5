@@ -24,9 +24,12 @@ struct FVG_Info
    datetime time_end;        // Thời gian kết thúc (cập nhật theo time hiện tại)
    double   top;             // Mức giá trên
    double   bottom;          // Mức giá dưới
+   double   original_top;    // Mức giá trên ban đầu
+   double   original_bottom; // Mức giá dưới ban đầu
    bool     is_bullish;      // true = Bullish, false = Bearish
    string   rect_name;       // Tên rectangle object
    bool     is_active;       // FVG còn active không
+   int      start_bar;       // Bar index khi tạo FVG
 };
 
 FVG_Info fvg_list[];        // Mảng lưu các FVG
@@ -114,7 +117,7 @@ void DetectFVG(int bar, const datetime &time[], const double &high[], const doub
       // Kiểm tra xem đã tồn tại FVG này chưa
       if(!IsFVGExists(time[bar+1], fvg_top, fvg_bottom, true))
       {
-         CreateFVG(time[bar+1], fvg_top, fvg_bottom, true);
+         CreateFVG(time[bar+1], fvg_top, fvg_bottom, true, bar+1);
       }
    }
 
@@ -128,7 +131,7 @@ void DetectFVG(int bar, const datetime &time[], const double &high[], const doub
       // Kiểm tra xem đã tồn tại FVG này chưa
       if(!IsFVGExists(time[bar+1], fvg_top, fvg_bottom, false))
       {
-         CreateFVG(time[bar+1], fvg_top, fvg_bottom, false);
+         CreateFVG(time[bar+1], fvg_top, fvg_bottom, false, bar+1);
       }
    }
 }
@@ -155,7 +158,7 @@ bool IsFVGExists(datetime check_time, double top, double bottom, bool is_bullish
 //+------------------------------------------------------------------+
 //| Tạo FVG mới                                                      |
 //+------------------------------------------------------------------+
-void CreateFVG(datetime start_time, double top, double bottom, bool is_bullish)
+void CreateFVG(datetime start_time, double top, double bottom, bool is_bullish, int bar_index)
 {
    // Tăng kích thước mảng
    fvg_count++;
@@ -168,8 +171,11 @@ void CreateFVG(datetime start_time, double top, double bottom, bool is_bullish)
    fvg_list[index].time_end = TimeCurrent() + PeriodSeconds() * 50; // Kéo dài về bên phải
    fvg_list[index].top = top;
    fvg_list[index].bottom = bottom;
+   fvg_list[index].original_top = top;
+   fvg_list[index].original_bottom = bottom;
    fvg_list[index].is_bullish = is_bullish;
    fvg_list[index].is_active = true;
+   fvg_list[index].start_bar = bar_index;
    fvg_list[index].rect_name = "FVG_" + IntegerToString(start_time) + "_" + (is_bullish ? "Bull" : "Bear");
 
    // Vẽ rectangle
@@ -218,9 +224,8 @@ void DrawFVG(int index)
 //+------------------------------------------------------------------+
 void UpdateAllFVG(const double &high[], const double &low[], const datetime &time[])
 {
-   double current_high = high[0];
-   double current_low = low[0];
    datetime current_time = time[0];
+   int bars_to_check = 200; // Số nến quét lại để kiểm tra mitigation
 
    for(int i = 0; i < fvg_count; i++)
    {
@@ -230,38 +235,72 @@ void UpdateAllFVG(const double &high[], const double &low[], const datetime &tim
       bool need_update = false;
       bool need_delete = false;
 
+      // Reset về giá trị ban đầu
+      fvg_list[i].top = fvg_list[i].original_top;
+      fvg_list[i].bottom = fvg_list[i].original_bottom;
+
       if(fvg_list[i].is_bullish)
       {
-         // Bullish FVG
-         // Kiểm tra mitigation: giá đi xuống vào vùng FVG
-         if(current_low <= fvg_list[i].top && current_low >= fvg_list[i].bottom)
+         // Bullish FVG - quét các nến để tìm mức low thấp nhất đã chạm vào FVG
+         double lowest_mitigation = fvg_list[i].original_top; // Bắt đầu từ top
+
+         for(int bar = 0; bar < bars_to_check; bar++)
          {
-            // Thu nhỏ FVG từ dưới lên
-            fvg_list[i].bottom = current_low;
-            need_update = true;
+            // Kiểm tra xem nến này có chạm vào vùng FVG không
+            if(low[bar] <= fvg_list[i].original_top && low[bar] >= fvg_list[i].original_bottom)
+            {
+               // Giá đã vào vùng FVG, cập nhật mức mitigation
+               if(low[bar] < lowest_mitigation)
+               {
+                  lowest_mitigation = low[bar];
+                  need_update = true;
+               }
+            }
+
+            // Kiểm tra phá vỡ: giá phá xuống dưới bottom ban đầu
+            if(low[bar] < fvg_list[i].original_bottom)
+            {
+               need_delete = true;
+               break;
+            }
          }
 
-         // Kiểm tra phá vỡ: giá phá qua dưới FVG
-         if(current_low < fvg_list[i].bottom)
+         // Cập nhật bottom mới = mức thấp nhất đã mitigate
+         if(need_update)
          {
-            need_delete = true;
+            fvg_list[i].bottom = lowest_mitigation;
          }
       }
       else
       {
-         // Bearish FVG
-         // Kiểm tra mitigation: giá đi lên vào vùng FVG
-         if(current_high >= fvg_list[i].bottom && current_high <= fvg_list[i].top)
+         // Bearish FVG - quét các nến để tìm mức high cao nhất đã chạm vào FVG
+         double highest_mitigation = fvg_list[i].original_bottom; // Bắt đầu từ bottom
+
+         for(int bar = 0; bar < bars_to_check; bar++)
          {
-            // Thu nhỏ FVG từ trên xuống
-            fvg_list[i].top = current_high;
-            need_update = true;
+            // Kiểm tra xem nến này có chạm vào vùng FVG không
+            if(high[bar] >= fvg_list[i].original_bottom && high[bar] <= fvg_list[i].original_top)
+            {
+               // Giá đã vào vùng FVG, cập nhật mức mitigation
+               if(high[bar] > highest_mitigation)
+               {
+                  highest_mitigation = high[bar];
+                  need_update = true;
+               }
+            }
+
+            // Kiểm tra phá vỡ: giá phá lên trên top ban đầu
+            if(high[bar] > fvg_list[i].original_top)
+            {
+               need_delete = true;
+               break;
+            }
          }
 
-         // Kiểm tra phá vỡ: giá phá qua trên FVG
-         if(current_high > fvg_list[i].top)
+         // Cập nhật top mới = mức cao nhất đã mitigate
+         if(need_update)
          {
-            need_delete = true;
+            fvg_list[i].top = highest_mitigation;
          }
       }
 
@@ -273,7 +312,7 @@ void UpdateAllFVG(const double &high[], const double &low[], const datetime &tim
          // Xóa FVG
          DeleteFVG(i);
       }
-      else if(need_update || true) // Luôn cập nhật để kéo dài time_end
+      else
       {
          // Cập nhật FVG
          DrawFVG(i);
