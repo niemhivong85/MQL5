@@ -97,7 +97,7 @@ int OnCalculate(const int rates_total,
    }
 
    // Cập nhật tất cả FVG (kiểm tra mitigation và phá vỡ)
-   UpdateAllFVG(high, low, time);
+   UpdateAllFVG(high, low, close, time);
 
    return(rates_total);
 }
@@ -222,7 +222,7 @@ void DrawFVG(int index)
 //+------------------------------------------------------------------+
 //| Cập nhật tất cả FVG                                              |
 //+------------------------------------------------------------------+
-void UpdateAllFVG(const double &high[], const double &low[], const datetime &time[])
+void UpdateAllFVG(const double &high[], const double &low[], const double &close[], const datetime &time[])
 {
    datetime current_time = time[0];
    int total_bars = ArraySize(time);
@@ -247,12 +247,12 @@ void UpdateAllFVG(const double &high[], const double &low[], const datetime &tim
          // Quét từ nến hiện tại (bar 0) cho đến khi gặp nến có time <= time_start của FVG
          for(int bar = 0; bar < total_bars; bar++)
          {
-            // Chỉ kiểm tra các nến SAU KHI FVG được tạo
-            if(time[bar] < fvg_list[i].time_start)
-               break; // Đã quét hết các nến sau khi FVG tạo, dừng lại
+            // Bỏ qua nến có time trước hoặc bằng time_start (tức là nến tạo FVG và các nến trước đó)
+            if(time[bar] <= fvg_list[i].time_start)
+               break; // Dừng lại, không cần kiểm tra các nến cũ hơn
 
-            // Kiểm tra phá vỡ: giá phá xuống dưới bottom ban đầu
-            if(low[bar] < fvg_list[i].original_bottom)
+            // Kiểm tra phá vỡ: giá đóng cửa (close) phá xuống dưới bottom ban đầu
+            if(close[bar] < fvg_list[i].original_bottom)
             {
                need_delete = true;
                break;
@@ -284,12 +284,12 @@ void UpdateAllFVG(const double &high[], const double &low[], const datetime &tim
          // Quét từ nến hiện tại (bar 0) cho đến khi gặp nến có time <= time_start của FVG
          for(int bar = 0; bar < total_bars; bar++)
          {
-            // Chỉ kiểm tra các nến SAU KHI FVG được tạo
-            if(time[bar] < fvg_list[i].time_start)
-               break; // Đã quét hết các nến sau khi FVG tạo, dừng lại
+            // Bỏ qua nến có time trước hoặc bằng time_start (tức là nến tạo FVG và các nến trước đó)
+            if(time[bar] <= fvg_list[i].time_start)
+               break; // Dừng lại, không cần kiểm tra các nến cũ hơn
 
-            // Kiểm tra phá vỡ: giá phá lên trên top ban đầu
-            if(high[bar] > fvg_list[i].original_top)
+            // Kiểm tra phá vỡ: giá đóng cửa (close) phá lên trên top ban đầu
+            if(close[bar] > fvg_list[i].original_top)
             {
                need_delete = true;
                break;
