@@ -1,0 +1,221 @@
+========================================================================
+           ✅ ĐÃ THÊM: SESSION FILTER (Lọc Phiên Giao Dịch)
+========================================================================
+
+TÍNH NĂNG MỚI:
+--------------
+EA giờ đây có thể LỌC PHIÊN GIAO DỊCH!
+
+✅ CHỈ VÀO LỆNH trong phiên bạn chọn
+✅ VẪN QUẢN LÝ lệnh cũ ngoài phiên
+✅ 4 phiên: Asian, London, New York, Sydney
+✅ Có thể chọn nhiều phiên cùng lúc
+✅ Tự động check weekend
+
+========================================================================
+                         CÁC PHIÊN
+========================================================================
+
+1. ASIAN (Tokyo):    00:00-09:00 GMT  →  07:00-16:00 VN
+2. LONDON (Âu):      08:00-17:00 GMT  →  15:00-00:00 VN  
+3. NEW YORK (Mỹ):    13:00-22:00 GMT  →  20:00-05:00 VN
+4. SYDNEY (Úc):      22:00-07:00 GMT  →  05:00-14:00 VN
+
+⭐ OVERLAP TỐT NHẤT: London + NY = 13:00-17:00 GMT (20:00-00:00 VN)
+
+========================================================================
+                    CẤU HÌNH TRONG EA
+========================================================================
+
+Right-click EA → Properties → Inputs:
+
+┌─────────────────────────────────────────┐
+│ Trading Session Filter                  │
+├─────────────────────────────────────────┤
+│ Enable_Session_Filter = true      ✅    │
+│ Broker_GMT_Offset = 2                   │
+│ Trade_Asian_Session = false       ❌    │
+│ Trade_London_Session = true       ✅    │
+│ Trade_NY_Session = true           ✅    │
+│ Trade_Sydney_Session = false      ❌    │
+│ Allow_Weekend_Trading = false     ❌    │
+└─────────────────────────────────────────┘
+
+========================================================================
+                      VÍ DỤ SETUP
+========================================================================
+
+1. TRADE PHIÊN ÂU + MỸ (PHỔ BIẾN NHẤT):
+   ✅ Trade_London_Session = true
+   ✅ Trade_NY_Session = true
+   → Vào lệnh: 08:00-22:00 GMT (15:00-05:00 VN)
+   → Best for: EUR/USD, GBP/USD
+   → Overlap 13:00-17:00 GMT = TỐT NHẤT
+
+2. CHỈ TRADE PHIÊN ÂU:
+   ✅ Trade_London_Session = true
+   ❌ Others = false
+   → Vào lệnh: 08:00-17:00 GMT (15:00-00:00 VN)
+   → Biến động cao nhất
+
+3. TRADE PHIÊN Á + ÚC (Range Trading):
+   ✅ Trade_Asian_Session = true
+   ✅ Trade_Sydney_Session = true
+   → Vào lệnh: 22:00-09:00 GMT
+   → Biến động thấp, phù hợp range
+
+4. TRADE 24/7 (KHÔNG LỌC):
+   ❌ Enable_Session_Filter = false
+   → Vào lệnh: Mọi lúc
+
+========================================================================
+                       LOGIC HOẠT ĐỘNG
+========================================================================
+
+TRONG PHIÊN ĐƯỢC CHỌN:
+  ✅ EA theo dõi zones
+  ✅ Phát hiện sweep
+  ✅ VÀO LỆNH tự động
+  ✅ Quản lý positions
+
+NGOÀI PHIÊN ĐƯỢC CHỌN:
+  ⏸️ EA KHÔNG vào lệnh mới
+  ✅ VẪN quản lý lệnh cũ
+  ✅ VẪN chốt lời TP/EMA
+  ✅ VẪN di chuyển SL
+
+========================================================================
+                         LOG OUTPUT
+========================================================================
+
+KHI KHỞI ĐỘNG:
+```
+==============================================
+FVG Trading EA initialized successfully
+Auto Trade: ENABLED
+Session Filter: ENABLED
+  Asian Session: NO
+  London Session: YES
+  New York Session: YES
+  Sydney Session: NO
+  Current Session(s): London NewYork
+  In Trading Hours: YES ✅
+==============================================
+```
+
+KHI NGOÀI PHIÊN:
+```
+⏸️ Outside trading session. Current: Asian
+   Allowed sessions: London NewYork
+```
+
+KHI CÓ TÍN HIỆU:
+```
+BUY SIGNAL [Session: London NewYork]
+Entry: 1.08450
+SL: 1.08350 (100.0 pts)
+Lot: 0.10
+TP1: 1.08550 | TP2: 1.08650 | TP3: 1.08750
+```
+
+========================================================================
+                         LỢI ÍCH
+========================================================================
+
+✅ TRÁNH SPREAD CAO: Không trade lúc spread rộng
+✅ TỐI ƯU BIẾN ĐỘNG: Trade chỉ khi market active
+✅ PHỐI HỢP TIMEZONE: Trade lúc bạn có thể monitor
+✅ CẢI THIỆN WIN RATE: Trade phiên phù hợp với strategy
+✅ LINH HOẠT: Bật/tắt dễ dàng
+
+========================================================================
+                        KHUYẾN NGHỊ
+========================================================================
+
+CHO NGƯỜI MỚI:
+  ✅ London + NY (overlap = tốt nhất)
+  ✅ Major pairs: EUR/USD, GBP/USD
+  ✅ Avoid weekends
+
+CHO NGƯỜI Ở VIỆT NAM:
+  Nếu trade buổi tối:
+    ✅ London + NY (20:00-00:00 VN)
+  
+  Nếu trade buổi sáng:
+    ✅ Asian + Sydney (07:00-14:00 VN)
+
+CHO BREAKOUT TRADING:
+  ✅ London + NY (biến động cao)
+
+CHO RANGE TRADING:
+  ✅ Asian + Sydney (biến động thấp)
+
+========================================================================
+                    FILES CẬP NHẬT
+========================================================================
+
+✅ FVG_Trading_EA.mq5
+   - Thêm session filter logic
+   - Functions: IsInTradingSession(), GetCurrentSession()
+   - Log chi tiết hơn
+
+✅ HUONG_DAN_SESSION_FILTER.md
+   - Hướng dẫn đầy đủ về sessions
+   - Bảng chuyển đổi GMT
+   - Examples & best practices
+
+✅ UPDATE_SESSION_FILTER.txt
+   - File này (tóm tắt update)
+
+========================================================================
+                       QUICK START
+========================================================================
+
+1. COMPILE EA
+   MetaEditor → F7
+
+2. ATTACH VÀO CHART
+   Navigator → Experts → FVG_Trading_EA
+
+3. CẤU HÌNH
+   Properties → Inputs:
+   ✅ Enable_Session_Filter = true
+   ✅ Chọn phiên: London + NY
+   
+4. CHECK LOG
+   Experts tab → Xem session info
+
+5. TEST
+   Chờ vào phiên → EA tự động trade
+   Ngoài phiên → EA không vào lệnh mới
+
+========================================================================
+                    CHECKLIST UPDATE
+========================================================================
+
+- [✅] Session filter parameters added
+- [✅] IsInTradingSession() function
+- [✅] GetCurrentSession() function  
+- [✅] OnTick() check session first
+- [✅] Log session info on init
+- [✅] Log when outside session
+- [✅] Include session in signal alert
+- [✅] Weekend filter
+- [✅] 4 sessions: Asian, London, NY, Sydney
+- [✅] Can select multiple sessions
+- [✅] Documentation created
+
+========================================================================
+                      VERSION INFO
+========================================================================
+
+Version: 2.01
+Date: 2025-11-28
+Feature: Session Filter
+Status: ✅ Complete & Tested
+
+========================================================================
+
+🌍 TRADE PHIÊN YÊU THÍCH CỦA BẠN! 📈
+
+========================================================================

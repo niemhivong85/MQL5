@@ -1,0 +1,151 @@
+========================================================================
+                    🚀 QUICK REFERENCE CARD
+========================================================================
+
+BẠN ĐANG DÙNG FILE NÀO?
+------------------------
+EA (Auto):     FVG_Trading_EA.mq5          → MT5/MQL5/Experts/
+Indicator:     FVG_Indicator_Enhanced.mq5  → MT5/MQL5/Indicators/
+
+========================================================================
+                    ⚡ SETUP NHANH - EA (5 BƯỚC)
+========================================================================
+
+1. COMPILE
+   MetaEditor → FVG_Trading_EA.mq5 → F7
+
+2. ATTACH
+   Navigator → Experts → FVG_Trading_EA → Kéo vào chart
+
+3. SETTINGS
+   ✅ Allow Algo Trading
+   ✅ Auto_Trade = true
+   ✅ Buy_Zone_Color = Chọn màu
+   ✅ Sell_Zone_Color = Chọn màu
+   ✅ Zone_Border_Width = 3
+
+4. TẠO ZONE
+   Bấm MUA → Zone xanh dương xuất hiện (200 points)
+   Bấm BÁN → Zone cam đỏ xuất hiện (200 points)
+
+5. KÉO & XÁC NHẬN
+   Click viền → Kéo → Bấm XÁC NHẬN
+   
+   → EA TỰ ĐỘNG VÀO LỆNH! 🤖
+
+========================================================================
+                    🎨 ĐỔI MÀU ZONE
+========================================================================
+
+Right-click chart → EA Properties → Inputs:
+
+Buy_Zone_Color:
+  - clrDodgerBlue (mặc định)
+  - clrLimeGreen
+  - clrAqua
+  
+Sell_Zone_Color:
+  - clrOrangeRed (mặc định)
+  - clrRed
+  - clrCrimson
+
+========================================================================
+                    🖱️ KÉO ZONE - 3 CÁCH
+========================================================================
+
+CÁCH 1: CHUỘT (DỄ NHẤT)
+  1. Click vào VIỀN (không phải giữa)
+  2. Giữ chuột
+  3. Kéo lên/xuống
+  4. Nhả
+
+CÁCH 2: OBJECTS LIST
+  1. Right-click → Objects → Objects List
+  2. ZONE_BUY hoặc ZONE_SELL
+  3. Double-click
+  4. Edit Price 1 và Price 2
+
+CÁCH 3: TĂNG VIỀN
+  EA Properties → Zone_Border_Width = 10
+  Viền dày = dễ click
+
+========================================================================
+                    🔧 TROUBLESHOOTING
+========================================================================
+
+❌ EA không vào lệnh
+   → Auto_Trade = true?
+   → Allow Algo Trading ✅?
+   → Đúng file EA không phải Indicator?
+
+❌ Zone khó kéo
+   → Zone_Border_Width = 10
+   → Zoom chart out (Ctrl + Scroll)
+   → Dùng Objects List
+
+❌ Không biết đang dùng EA hay Indicator
+   → MetaEditor → Navigator
+   → Experts = EA ✅
+   → Indicators = Indicator
+
+========================================================================
+                    📊 PARAMETERS QUAN TRỌNG
+========================================================================
+
+EA Settings:
+  Magic_Number = 123456
+  Auto_Trade = true ⚠️ (BẮT BUỘC)
+
+Position Sizing:
+  Risk_Amount_Per_Trade = 100 ($)
+  Auto_Calculate_Lot = true
+
+Stop Loss:
+  SL_Use_Sweep_Low = true
+  SL_Buffer_Points = 5
+
+RR Exit:
+  RR_Level_1 = 1.0 → Close 50%
+  RR_Level_2 = 2.0 → Close 30%
+  RR_Level_3 = 3.0 → Close 20%
+
+Zone UI:
+  Zone_Border_Width = 3
+  Zone_Transparency = 70
+
+========================================================================
+                    📖 ĐỌC THÊM
+========================================================================
+
+Chi tiết EA:        README_EA.md
+Phân biệt EA/Ind:   PHAN_BIET_EA_VA_INDICATOR.txt
+Hướng dẫn nhanh:    HUONG_DAN_SU_DUNG_EA.md
+So sánh:            EA_VS_INDICATOR.md
+Cải tiến:           SUMMARY_CAI_TIEN.md
+
+========================================================================
+                    ✅ CHECKLIST
+========================================================================
+
+Trước khi dùng:
+  [ ] Compile thành công
+  [ ] Đúng file: FVG_Trading_EA.mq5 (EA)
+  [ ] Auto_Trade = true
+  [ ] Allow Algo Trading ✅
+  [ ] Zone_Border_Width >= 3
+  [ ] Chọn màu zone
+  [ ] Test tạo zone OK
+  [ ] Test kéo zone OK
+
+========================================================================
+
+Version: 2.01
+Date: 2025-11-28
+Status: ✅ Complete
+
+🤖 EXPERT ADVISOR = TỰ ĐỘNG VÀO LỆNH
+📊 INDICATOR = CHỈ ALERT
+
+Chọn đúng tool cho nhu cầu của bạn!
+
+========================================================================
