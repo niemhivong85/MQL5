@@ -170,6 +170,7 @@ string indicator_prefix = "FVG_";
 string news_prefix = "NEWS_";
 string button_prefix = "BTN_";
 string zone_prefix = "ZONE_";
+string sweep_prefix = "SWEEP_";
 NewsTime news_times[];
 
 // Trading Zone variables
