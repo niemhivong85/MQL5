@@ -1,0 +1,96 @@
+========================================================================
+            📥 HƯỚNG DẪN TẢI FILE VỀ MÁY WINDOWS
+========================================================================
+
+BẠN ĐANG DÙNG: Remote Workspace (Cursor/Cloud)
+MUỐN TẢI VỀ: Máy Windows của bạn
+
+========================================================================
+                    CÁCH 1: TỪ FILE EXPLORER
+========================================================================
+
+1. NHÌN BÊN TRÁI MÀN HÌNH
+   - Thấy panel "Explorer" hoặc "Files"
+   - Thấy folder: workspace
+
+2. MỞ FOLDER workspace
+   - Click vào workspace
+   - Thấy danh sách files
+
+3. TÌM FILE: FVG_Trading_EA.mq5
+
+4. CLICK PHẢI VÀO FILE
+   - Chọn "Download" 
+   - HOẶC "Save As"
+   - HOẶC "Export"
+
+5. CHỌN NƠI LƯU
+   - Desktop hoặc Downloads folder
+   - Save
+
+========================================================================
+                    CÁCH 2: COPY NỘI DUNG
+========================================================================
+
+1. CLICK VÀO FILE: FVG_Trading_EA.mq5
+   - File sẽ mở trong editor
+
+2. SELECT ALL
+   - Ctrl + A (chọn toàn bộ nội dung)
+
+3. COPY
+   - Ctrl + C
+
+4. MỞ NOTEPAD TRÊN WINDOWS
+   - Start → Notepad
+
+5. PASTE
+   - Ctrl + V
+
+6. SAVE AS
+   - File → Save As
+   - File name: FVG_Trading_EA.mq5
+   - Save as type: All Files (*)
+   - Encoding: UTF-8
+   - Save to Desktop
+
+========================================================================
+                    CÁCH 3: TỪ TERMINAL/COMMAND
+========================================================================
+
+Nếu thấy terminal trong Cursor:
+
+1. CLICK VÀO TERMINAL (panel dưới)
+
+2. GÕ LỆNH:
+   cat /workspace/FVG_Trading_EA.mq5
+
+3. COPY OUTPUT
+   - Ctrl + A → Ctrl + C
+
+4. PASTE VÀO NOTEPAD
+   - Mở Notepad
+   - Ctrl + V
+   - Save as: FVG_Trading_EA.mq5
+
+========================================================================
+                    TÔI SẼ GIÚP BẠN CÁCH KHÁC
+========================================================================
+
+Vì không thể tạo link download trực tiếp, tôi sẽ:
+
+1. Hiển thị toàn bộ nội dung file
+2. Bạn copy và save
+
+Hoặc:
+
+1. Tạo file ZIP
+2. Bạn tải file ZIP về
+
+BẠN MUỐN CÁCH NÀO?
+
+A. Hiển thị toàn bộ code → Bạn copy
+B. Tôi hướng dẫn chi tiết cách dùng File Explorer trong Cursor
+C. Tạo file nhỏ hơn, dễ copy hơn
+
+========================================================================
