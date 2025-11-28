@@ -1,34 +1,65 @@
-# MQL5 FVG Indicator Project
+# MQL5 FVG Trading System
 
 ## 📁 Files
 
-### 1. **FVG_Indicator_Enhanced.mq5** ⭐ NEW!
-Enhanced version với đầy đủ tính năng giao dịch:
+### 1. **FVG_Trading_EA.mq5** 🤖 EXPERT ADVISOR (TỰ ĐỘNG VÀO LỆNH)
+Expert Advisor có khả năng giao dịch tự động:
+- ✅ **TỰ ĐỘNG VÀO LỆNH** khi có tín hiệu
+- ✅ **Quản lý lệnh tự động** (Partial close TP1/TP2/TP3)
+- ✅ **EMA Trailing Exit**
 - ✅ Fair Value Gap detection
-- ✅ News filter by currency
-- ✅ **Interactive Trading Zones (Drag & Drop)**
-- ✅ **Sweep Pattern Detection**
-- ✅ **Auto Position Sizing & Risk Management**
-- ✅ **Dual Exit Strategy (EMA Trailing + Risk:Reward)**
+- ✅ Interactive Trading Zones
+- ✅ Sweep Pattern Detection
+- ✅ Auto Position Sizing & Risk Management
 
-**📖 Xem hướng dẫn chi tiết:** [README_Enhanced.md](README_Enhanced.md)
+**📖 Hướng dẫn EA:** [README_EA.md](README_EA.md) ⭐ RECOMMENDED
+
+---
+
+### 2. **FVG_Indicator_Enhanced.mq5** 📊 INDICATOR (CHỈ HIỂN THỊ)
+Indicator version (không tự động vào lệnh):
+- ✅ Phát hiện tín hiệu và alert
+- ✅ Vẽ zones & levels
+- ❌ Không vào lệnh tự động
+- ❌ Không quản lý positions
+
+**📖 Hướng dẫn Indicator:** [README_Enhanced.md](README_Enhanced.md)
 
 ---
 
 ## 🚀 Quick Start
 
-### Cài đặt:
+### **Option 1: Expert Advisor (TỰ ĐỘNG VÀO LỆNH)** ⭐ RECOMMENDED
+
+```bash
+# Copy file vào thư mục MT5
+MT5/MQL5/Experts/FVG_Trading_EA.mq5
+```
+
+**Sử dụng:**
+1. Kéo EA vào chart
+2. Bật "Allow Algo Trading"
+3. Set `Auto_Trade = true`
+4. Bấm nút **MUA** hoặc **BÁN**
+5. Kéo ô vuông đến vị trí
+6. Bấm **XÁC NHẬN**
+7. **EA tự động vào lệnh** khi có tín hiệu! 🤖
+
+---
+
+### **Option 2: Indicator (CHỈ ALERT)**
+
 ```bash
 # Copy file vào thư mục MT5
 MT5/MQL5/Indicators/FVG_Indicator_Enhanced.mq5
 ```
 
-### Sử dụng:
+**Sử dụng:**
 1. Kéo indicator vào chart
 2. Bấm nút **MUA** hoặc **BÁN**
-3. Kéo ô vuông đến vị trí mong muốn
+3. Kéo ô vuông đến vị trí
 4. Bấm **XÁC NHẬN**
-5. Chờ tín hiệu Sweep + Pattern
+5. Chờ alert, **vào lệnh thủ công**
 
 ---
 
@@ -80,19 +111,26 @@ Pattern Found → Calculate SL/TP/Lot → Alert → Manual Entry
 
 ## 📚 Documentation
 
-- [README_Enhanced.md](README_Enhanced.md) - Hướng dẫn chi tiết
-- [FVG_Indicator_Enhanced.mq5](FVG_Indicator_Enhanced.mq5) - Source code
+- [README_EA.md](README_EA.md) - **Expert Advisor (Auto Trading)** ⭐
+- [README_Enhanced.md](README_Enhanced.md) - Indicator (Manual Trading)
+- [FEATURES_SUMMARY.md](FEATURES_SUMMARY.md) - Technical Summary
+- [FVG_Trading_EA.mq5](FVG_Trading_EA.mq5) - EA Source Code
+- [FVG_Indicator_Enhanced.mq5](FVG_Indicator_Enhanced.mq5) - Indicator Source Code
 
 ---
 
 ## 🔄 Version History
 
-### v2.00 (2025-11-28) - Enhanced Version
+### v2.00 (2025-11-28) - Expert Advisor Version 🤖
+- ➕ **EXPERT ADVISOR: Tự động vào lệnh**
+- ➕ **Auto trade execution với CTrade**
+- ➕ **Partial close theo RR (TP1/TP2/TP3)**
+- ➕ **Position management trong OnTick()**
+- ➕ **EMA trailing exit**
 - ➕ Trading zone với drag & drop interface
 - ➕ Sweep pattern detection
 - ➕ Bottom/Top formation detection
 - ➕ Auto position sizing
-- ➕ Dual exit strategy (EMA + RR)
 - ➕ Zone mitigation (như FVG)
 - ➕ Visual trade levels
 
