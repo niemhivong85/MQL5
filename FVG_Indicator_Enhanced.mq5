@@ -244,9 +244,9 @@ int OnInit()
    }
    
    CreateButtons();
-   ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
-   ChartSetInteger(0, CHART_EVENT_OBJECT_CREATE, true);
-   ChartSetInteger(0, CHART_EVENT_OBJECT_DRAG, true);
+   
+   // Chart events are automatically enabled when OnChartEvent() exists
+   ChartRedraw();
    
    return(INIT_SUCCEEDED);
 }
