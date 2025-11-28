@@ -210,6 +210,7 @@ bool IsSweepCandle(const double &open[], const double &high[], const double &low
 bool IsBottomFormation(const double &open[], const double &high[], const double &low[], const double &close[], int sweep_index);
 bool IsTopFormation(const double &open[], const double &high[], const double &low[], const double &close[], int sweep_index);
 void SendAlert(string message);
+void MarkSweepCandle(datetime time, double price, bool is_sweep_low);
 void UpdateZoneMitigation(TradingZone &zone, const double &high[], const double &low[], const double &close[]);
 void CalculateStopLoss(TradingZone &zone, const double &high[], const double &low[]);
 double CalculateLotSize(double stop_loss_points);
@@ -995,6 +996,9 @@ bool CheckSweepAndPattern(const datetime &time[], const double &open[], const do
                buy_zone.sweep_low = low[i];
                buy_zone.sweep_high = high[i];
                
+               // Đánh dấu mũi tên XANH
+               MarkSweepCandle(time[i], low[i], true);
+               
                Print("BUY Signal: Sweep at bar ", i, " (Low=", low[i], ") + Bottom formation detected!");
                return true;
             }
@@ -1006,6 +1010,9 @@ bool CheckSweepAndPattern(const datetime &time[], const double &open[], const do
                sell_zone.sweep_bar_index = i;
                sell_zone.sweep_low = low[i];
                sell_zone.sweep_high = high[i];
+               
+               // Đánh dấu mũi tên ĐỎ
+               MarkSweepCandle(time[i], high[i], false);
                
                Print("SELL Signal: Sweep at bar ", i, " (High=", high[i], ") + Top formation detected!");
                return true;
@@ -1120,6 +1127,55 @@ void SendAlert(string message)
       PlaySound(Alert_Sound);
    
    Print("SIGNAL: ", message);
+}
+
+//+------------------------------------------------------------------+
+void MarkSweepCandle(datetime time, double price, bool is_sweep_low)
+{
+   string marker_name = sweep_prefix + TimeToString(time, TIME_DATE|TIME_SECONDS);
+   
+   // Delete if exists
+   if(ObjectFind(0, marker_name) >= 0)
+      ObjectDelete(0, marker_name);
+   
+   // Create arrow
+   int arrow_code;
+   color arrow_color;
+   double arrow_price;
+   
+   // Calculate offset (khoảng cách từ nến để không che nến)
+   double point_offset = 30 * _Point;
+   
+   if(is_sweep_low)
+   {
+      // Sweep low (BUY signal) - mũi tên XANH ở DƯỚI nến, hướng LÊN
+      arrow_price = price - point_offset;
+      arrow_code = 233;  // ✓ Check mark
+      arrow_color = clrLime;
+   }
+   else
+   {
+      // Sweep high (SELL signal) - mũi tên ĐỎ ở TRÊN nến, hướng XUỐNG  
+      arrow_price = price + point_offset;
+      arrow_code = 234;  // ✗ X mark
+      arrow_color = clrRed;
+   }
+   
+   if(ObjectCreate(0, marker_name, OBJ_ARROW, 0, time, arrow_price))
+   {
+      ObjectSetInteger(0, marker_name, OBJPROP_ARROWCODE, arrow_code);
+      ObjectSetInteger(0, marker_name, OBJPROP_COLOR, arrow_color);
+      ObjectSetInteger(0, marker_name, OBJPROP_WIDTH, 3);
+      ObjectSetInteger(0, marker_name, OBJPROP_BACK, false);
+      ObjectSetInteger(0, marker_name, OBJPROP_SELECTABLE, false);
+      ObjectSetInteger(0, marker_name, OBJPROP_HIDDEN, true);
+      
+      // Add tooltip
+      string tooltip = is_sweep_low ? "✓ SWEEP LOW + FORMATION (BUY)" : "✗ SWEEP HIGH + FORMATION (SELL)";
+      ObjectSetString(0, marker_name, OBJPROP_TEXT, tooltip);
+      
+      Print("📍 Marked sweep: ", is_sweep_low ? "LOW" : "HIGH", " at ", TimeToString(time), " price=", price);
+   }
 }
 
 //+------------------------------------------------------------------+
@@ -1866,6 +1922,15 @@ void DeleteAllObjects()
    {
       string name = ObjectName(0, i, 0, OBJ_TREND);
       if(StringFind(name, "BUY_") >= 0 || StringFind(name, "SELL_") >= 0)
+         ObjectDelete(0, name);
+   }
+   
+   // Delete sweep markers
+   total = ObjectsTotal(0, 0, OBJ_ARROW);
+   for(int i = total - 1; i >= 0; i--)
+   {
+      string name = ObjectName(0, i, 0, OBJ_ARROW);
+      if(StringFind(name, sweep_prefix) >= 0)
          ObjectDelete(0, name);
    }
 }
