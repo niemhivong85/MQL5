@@ -1714,67 +1714,108 @@ void UpdateFVGStatus(const datetime &time[], const double &high[], const double 
    {
       if(!FVG_Array[i].is_active)
          continue;
-         
-      for(int bar = 0; bar < MathMin(100, ArraySize(time)); bar++)
+      
+      // Bước 1: Tìm bar index của FVG trong mảng hiện tại
+      int fvg_bar_index = -1;
+      for(int bar = 0; bar < ArraySize(time); bar++)
       {
-         if(time[bar] <= FVG_Array[i].time_start)
-            continue;
-            
+         if(time[bar] == FVG_Array[i].time_start)
+         {
+            fvg_bar_index = bar;
+            break;
+         }
+      }
+      
+      // Nếu không tìm thấy FVG bar (FVG quá cũ, nằm ngoài dữ liệu hiện tại), bỏ qua
+      if(fvg_bar_index < 0)
+         continue;
+      
+      // Bước 2: Quét TẤT CẢ các nến SAU khi FVG tạo (từ fvg_bar_index-1 đến nến hiện tại bar[0])
+      // Vì mảng là reversed (bar[0] = newest), nên quét từ fvg_bar_index-1 về 0
+      for(int bar = fvg_bar_index - 1; bar >= 0; bar--)
+      {
          bool is_modified = false;
+         bool should_delete = false;
          
          if(FVG_Array[i].is_bullish)
          {
+            // BULLISH FVG - giá đi xuống
             double bar_low = low[bar];
+            double bar_close = close[bar];
             
-            if(Delete_On_Break && close[bar] < FVG_Array[i].bottom)
+            // Delete On Break: giá CLOSE dưới bottom của FVG
+            if(Delete_On_Break && bar_close < FVG_Array[i].bottom)
             {
-               FVG_Array[i].is_active = false;
-               ObjectDelete(0, FVG_Array[i].rect_name);
-               break;
+               should_delete = true;
+               Print("⚠️ FVG Bullish DELETED (Break): Bar time=", TimeToString(time[bar]), 
+                     " Close=", bar_close, " < Bottom=", FVG_Array[i].bottom);
             }
-            
-            if(Fill_On_Touch && bar_low < FVG_Array[i].top && bar_low > FVG_Array[i].bottom)
+            // Fill On Touch: giá LOW chạm vào FVG (giữa top và bottom)
+            else if(Fill_On_Touch && bar_low < FVG_Array[i].top && bar_low > FVG_Array[i].bottom)
             {
+               double old_top = FVG_Array[i].top;
                FVG_Array[i].top = bar_low;
                is_modified = true;
                
+               Print("📉 FVG Bullish MITIGATED: Top ", old_top, " -> ", bar_low, 
+                     " (Bar: ", TimeToString(time[bar]), ")");
+               
+               // Nếu FVG quá nhỏ sau khi mitigation, xóa luôn
                if(FVG_Array[i].top - FVG_Array[i].bottom < Min_FVG_Points * _Point)
                {
-                  FVG_Array[i].is_active = false;
-                  ObjectDelete(0, FVG_Array[i].rect_name);
-                  break;
+                  should_delete = true;
+                  Print("⚠️ FVG Bullish DELETED (Too small after mitigation)");
                }
             }
          }
          else
          {
+            // BEARISH FVG - giá đi lên
             double bar_high = high[bar];
+            double bar_close = close[bar];
             
-            if(Delete_On_Break && close[bar] > FVG_Array[i].top)
+            // Delete On Break: giá CLOSE trên top của FVG
+            if(Delete_On_Break && bar_close > FVG_Array[i].top)
             {
-               FVG_Array[i].is_active = false;
-               ObjectDelete(0, FVG_Array[i].rect_name);
-               break;
+               should_delete = true;
+               Print("⚠️ FVG Bearish DELETED (Break): Bar time=", TimeToString(time[bar]), 
+                     " Close=", bar_close, " > Top=", FVG_Array[i].top);
             }
-            
-            if(Fill_On_Touch && bar_high > FVG_Array[i].bottom && bar_high < FVG_Array[i].top)
+            // Fill On Touch: giá HIGH chạm vào FVG (giữa bottom và top)
+            else if(Fill_On_Touch && bar_high > FVG_Array[i].bottom && bar_high < FVG_Array[i].top)
             {
+               double old_bottom = FVG_Array[i].bottom;
                FVG_Array[i].bottom = bar_high;
                is_modified = true;
                
+               Print("📈 FVG Bearish MITIGATED: Bottom ", old_bottom, " -> ", bar_high, 
+                     " (Bar: ", TimeToString(time[bar]), ")");
+               
+               // Nếu FVG quá nhỏ sau khi mitigation, xóa luôn
                if(FVG_Array[i].top - FVG_Array[i].bottom < Min_FVG_Points * _Point)
                {
-                  FVG_Array[i].is_active = false;
-                  ObjectDelete(0, FVG_Array[i].rect_name);
-                  break;
+                  should_delete = true;
+                  Print("⚠️ FVG Bearish DELETED (Too small after mitigation)");
                }
             }
          }
          
+         // Xử lý xóa FVG
+         if(should_delete)
+         {
+            FVG_Array[i].is_active = false;
+            ObjectDelete(0, FVG_Array[i].rect_name);
+            break;  // Dừng kiểm tra nến cho FVG này
+         }
+         
+         // Vẽ lại FVG nếu có thay đổi
          if(is_modified)
+         {
             DrawFVGRectangle(i);
+         }
       }
       
+      // Cập nhật thời gian kết thúc FVG (kéo dài đến tương lai)
       if(FVG_Array[i].is_active)
       {
          FVG_Array[i].time_end = TimeCurrent() + PeriodSeconds() * 500;
