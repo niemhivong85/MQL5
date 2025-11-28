@@ -274,8 +274,26 @@ int OnInit()
    CreateButtons();
    ChartRedraw();
    
+   Print("==============================================");
    Print("FVG Trading EA initialized successfully");
    Print("Auto Trade: ", Auto_Trade ? "ENABLED" : "DISABLED");
+   
+   // Print session settings
+   if(Enable_Session_Filter)
+   {
+      Print("Session Filter: ENABLED");
+      Print("  Asian Session: ", Trade_Asian_Session ? "YES" : "NO");
+      Print("  London Session: ", Trade_London_Session ? "YES" : "NO");
+      Print("  New York Session: ", Trade_NY_Session ? "YES" : "NO");
+      Print("  Sydney Session: ", Trade_Sydney_Session ? "YES" : "NO");
+      Print("  Current Session(s): ", GetCurrentSession());
+      Print("  In Trading Hours: ", IsInTradingSession() ? "YES ✅" : "NO ⏸️");
+   }
+   else
+   {
+      Print("Session Filter: DISABLED (Trade 24/7)");
+   }
+   Print("==============================================");
    
    return(INIT_SUCCEEDED);
 }
@@ -297,6 +315,18 @@ void OnTick()
    // Check trading session first
    if(Enable_Session_Filter && !IsInTradingSession())
    {
+      static datetime last_log = 0;
+      if(TimeCurrent() - last_log > 3600)  // Log mỗi giờ
+      {
+         Print("⏸️ Outside trading session. Current: ", GetCurrentSession());
+         Print("   Allowed sessions: ",
+               (Trade_Asian_Session ? "Asian " : ""),
+               (Trade_London_Session ? "London " : ""),
+               (Trade_NY_Session ? "NewYork " : ""),
+               (Trade_Sydney_Session ? "Sydney" : ""));
+         last_log = TimeCurrent();
+      }
+      
       // Outside trading hours - only manage existing positions
       ManagePositions();
       return;
@@ -332,8 +362,9 @@ void OnTick()
          
          DrawTradeLevels(buy_zone);
          
-         string msg = StringFormat("BUY SIGNAL\nEntry: %.5f\nSL: %.5f (%.1f pts)\nLot: %.2f\nTP1: %.5f | TP2: %.5f | TP3: %.5f",
-                                   buy_zone.entry_price, buy_zone.stop_loss_price, sl_points,
+         string session_info = Enable_Session_Filter ? " [Session: " + GetCurrentSession() + "]" : "";
+         string msg = StringFormat("BUY SIGNAL%s\nEntry: %.5f\nSL: %.5f (%.1f pts)\nLot: %.2f\nTP1: %.5f | TP2: %.5f | TP3: %.5f",
+                                   session_info, buy_zone.entry_price, buy_zone.stop_loss_price, sl_points,
                                    buy_zone.lot_size, buy_zone.tp1_price, buy_zone.tp2_price, buy_zone.tp3_price);
          SendAlert(msg);
          
@@ -361,8 +392,9 @@ void OnTick()
          
          DrawTradeLevels(sell_zone);
          
-         string msg = StringFormat("SELL SIGNAL\nEntry: %.5f\nSL: %.5f (%.1f pts)\nLot: %.2f\nTP1: %.5f | TP2: %.5f | TP3: %.5f",
-                                   sell_zone.entry_price, sell_zone.stop_loss_price, sl_points,
+         string session_info = Enable_Session_Filter ? " [Session: " + GetCurrentSession() + "]" : "";
+         string msg = StringFormat("SELL SIGNAL%s\nEntry: %.5f\nSL: %.5f (%.1f pts)\nLot: %.2f\nTP1: %.5f | TP2: %.5f | TP3: %.5f",
+                                   session_info, sell_zone.entry_price, sell_zone.stop_loss_price, sl_points,
                                    sell_zone.lot_size, sell_zone.tp1_price, sell_zone.tp2_price, sell_zone.tp3_price);
          SendAlert(msg);
          
@@ -1402,5 +1434,91 @@ void AddNewsTime(int &count, string curr, int day, int hour, int min, int impact
 bool IsNewsTime(datetime check_time)
 {
    return false;
+}
+
+//+------------------------------------------------------------------+
+bool IsInTradingSession()
+{
+   if(!Enable_Session_Filter)
+      return true;  // Không lọc phiên = trade mọi lúc
+   
+   // Check weekend
+   MqlDateTime dt;
+   TimeToStruct(TimeCurrent(), dt);
+   
+   if(!Allow_Weekend_Trading)
+   {
+      if(dt.day_of_week == 0 || dt.day_of_week == 6)  // Sunday or Saturday
+      {
+         return false;
+      }
+   }
+   
+   // Get GMT hour
+   datetime gmt_time = TimeGMT();
+   TimeToStruct(gmt_time, dt);
+   int gmt_hour = dt.hour;
+   
+   // Check each session
+   bool in_session = false;
+   
+   // Asian Session (Tokyo): 00:00-09:00 GMT
+   if(Trade_Asian_Session)
+   {
+      if(gmt_hour >= 0 && gmt_hour < 9)
+         in_session = true;
+   }
+   
+   // London Session: 08:00-17:00 GMT
+   if(Trade_London_Session)
+   {
+      if(gmt_hour >= 8 && gmt_hour < 17)
+         in_session = true;
+   }
+   
+   // New York Session: 13:00-22:00 GMT
+   if(Trade_NY_Session)
+   {
+      if(gmt_hour >= 13 && gmt_hour < 22)
+         in_session = true;
+   }
+   
+   // Sydney Session: 22:00-07:00 GMT (crosses midnight)
+   if(Trade_Sydney_Session)
+   {
+      if(gmt_hour >= 22 || gmt_hour < 7)
+         in_session = true;
+   }
+   
+   return in_session;
+}
+
+//+------------------------------------------------------------------+
+string GetCurrentSession()
+{
+   datetime gmt_time = TimeGMT();
+   MqlDateTime dt;
+   TimeToStruct(gmt_time, dt);
+   int gmt_hour = dt.hour;
+   
+   string sessions = "";
+   
+   // Check which sessions are active now
+   if(gmt_hour >= 0 && gmt_hour < 9)
+      sessions += "Asian ";
+   
+   if(gmt_hour >= 8 && gmt_hour < 17)
+      sessions += "London ";
+   
+   if(gmt_hour >= 13 && gmt_hour < 22)
+      sessions += "NewYork ";
+   
+   if(gmt_hour >= 22 || gmt_hour < 7)
+      sessions += "Sydney ";
+   
+   if(sessions == "")
+      sessions = "No active session";
+   
+   return sessions;
 }
 //+------------------------------------------------------------------+
