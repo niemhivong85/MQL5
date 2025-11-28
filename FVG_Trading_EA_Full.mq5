@@ -155,8 +155,6 @@ struct TradingZone
    string   btn_lock_name;
    string   btn_edit_name;
    string   btn_delete_name;
-   string   sweep_marker_names[];  // Danh sách các sweep markers của zone này
-   int      sweep_count;
    bool     signal_triggered;
    datetime last_check_time;
    int      sweep_bar_index;
@@ -222,7 +220,9 @@ bool IsSweepCandle(const double &open[], const double &high[], const double &low
 bool IsBottomFormation(const double &open[], const double &high[], const double &low[], const double &close[], int sweep_index);
 bool IsTopFormation(const double &open[], const double &high[], const double &low[], const double &close[], int sweep_index);
 void SendAlert(string message);
-void MarkSweepCandle(datetime time, double price, bool is_sweep_low);
+void MarkSweepCandle(datetime time, double price, bool is_sweep_low, bool has_formation);
+void ScanHistoricalSweeps();
+void DeleteSweepMarkers();
 void UpdateZoneMitigation(TradingZone &zone, const double &high[], const double &low[], const double &close[]);
 void CalculateStopLoss(TradingZone &zone, const double &high[], const double &low[]);
 double CalculateLotSize(double stop_loss_points);
@@ -261,8 +261,6 @@ int OnInit()
    buy_zone.btn_lock_name = button_prefix + "BUY_LOCK";
    buy_zone.btn_edit_name = button_prefix + "BUY_EDIT";
    buy_zone.btn_delete_name = button_prefix + "BUY_DELETE";
-   ArrayResize(buy_zone.sweep_marker_names, 0);
-   buy_zone.sweep_count = 0;
    buy_zone.signal_triggered = false;
    buy_zone.order_placed = false;
    buy_zone.top = 0;
@@ -324,6 +322,12 @@ int OnInit()
    
    CreateButtons();
    
+   // Quét và đánh dấu sweep lịch sử
+   if(Show_Historical_Sweeps)
+   {
+      ScanHistoricalSweeps();
+   }
+   
    ChartRedraw();
    
    Print("✅ FVG Trading EA initialized successfully");
@@ -340,6 +344,7 @@ void OnDeinit(const int reason)
       IndicatorRelease(ema_handle);
    
    DeleteAllObjects();
+   DeleteSweepMarkers();
    Comment("");
 }
 
@@ -1010,8 +1015,8 @@ bool CheckSweepAndPattern(const datetime &time[], const double &open[], const do
                buy_zone.sweep_low = low[i];
                buy_zone.sweep_high = high[i];
                
-               // Đánh dấu mũi tên XANH
-               MarkSweepCandle(time[i], low[i], true);
+               // Đánh dấu mũi tên XANH (có formation)
+               MarkSweepCandle(time[i], low[i], true, true);
                
                Print("BUY Signal: Sweep at bar ", i, " (Low=", low[i], ") + Bottom formation detected!");
                return true;
@@ -1025,8 +1030,8 @@ bool CheckSweepAndPattern(const datetime &time[], const double &open[], const do
                sell_zone.sweep_low = low[i];
                sell_zone.sweep_high = high[i];
                
-               // Đánh dấu mũi tên ĐỎ
-               MarkSweepCandle(time[i], high[i], false);
+               // Đánh dấu mũi tên ĐỎ (có formation)
+               MarkSweepCandle(time[i], high[i], false, true);
                
                Print("SELL Signal: Sweep at bar ", i, " (High=", high[i], ") + Top formation detected!");
                return true;
@@ -1144,8 +1149,15 @@ void SendAlert(string message)
 }
 
 //+------------------------------------------------------------------+
-void MarkSweepCandle(datetime time, double price, bool is_sweep_low)
+void MarkSweepCandle(datetime time, double price, bool is_sweep_low, bool has_formation)
 {
+   // Kiểm tra option hiển thị
+   if(has_formation && !Mark_Sweep_With_Formation)
+      return;  // Không hiện sweep có formation
+   
+   if(!has_formation && !Mark_Sweep_Without_Formation)
+      return;  // Không hiện sweep chưa có formation
+   
    string marker_name = sweep_prefix + TimeToString(time, TIME_DATE|TIME_SECONDS);
    
    // Delete if exists
@@ -1158,37 +1170,128 @@ void MarkSweepCandle(datetime time, double price, bool is_sweep_low)
    double arrow_price;
    
    // Calculate offset (khoảng cách từ nến để không che nến)
-   double point_offset = 30 * _Point;
+   double point_offset = 50 * _Point;
    
    if(is_sweep_low)
    {
-      // Sweep low (BUY signal) - mũi tên XANH ở DƯỚI nến, hướng LÊN
+      // Sweep low (BUY signal) - mũi tên ở DƯỚI nến, hướng LÊN
       arrow_price = price - point_offset;
-      arrow_code = 233;  // ✓ Check mark
-      arrow_color = clrLime;
+      
+      if(has_formation)
+      {
+         arrow_code = 233;  // ✓ Check mark (có formation)
+         arrow_color = Sweep_Buy_Color;
+      }
+      else
+      {
+         arrow_code = 159;  // • Dot (chưa có formation)
+         arrow_color = clrYellow;
+      }
    }
    else
    {
-      // Sweep high (SELL signal) - mũi tên ĐỎ ở TRÊN nến, hướng XUỐNG  
+      // Sweep high (SELL signal) - mũi tên ở TRÊN nến, hướng XUỐNG  
       arrow_price = price + point_offset;
-      arrow_code = 234;  // ✗ X mark
-      arrow_color = clrRed;
+      
+      if(has_formation)
+      {
+         arrow_code = 234;  // ✗ X mark (có formation)
+         arrow_color = Sweep_Sell_Color;
+      }
+      else
+      {
+         arrow_code = 159;  // • Dot (chưa có formation)
+         arrow_color = clrOrange;
+      }
    }
    
    if(ObjectCreate(0, marker_name, OBJ_ARROW, 0, time, arrow_price))
    {
       ObjectSetInteger(0, marker_name, OBJPROP_ARROWCODE, arrow_code);
       ObjectSetInteger(0, marker_name, OBJPROP_COLOR, arrow_color);
-      ObjectSetInteger(0, marker_name, OBJPROP_WIDTH, 3);
+      ObjectSetInteger(0, marker_name, OBJPROP_WIDTH, Sweep_Arrow_Size);
       ObjectSetInteger(0, marker_name, OBJPROP_BACK, false);
       ObjectSetInteger(0, marker_name, OBJPROP_SELECTABLE, false);
       ObjectSetInteger(0, marker_name, OBJPROP_HIDDEN, true);
       
       // Add tooltip
-      string tooltip = is_sweep_low ? "✓ SWEEP LOW + FORMATION (BUY)" : "✗ SWEEP HIGH + FORMATION (SELL)";
-      ObjectSetString(0, marker_name, OBJPROP_TEXT, tooltip);
+      string tooltip = is_sweep_low ? "SWEEP LOW" : "SWEEP HIGH";
+      if(has_formation)
+         tooltip += " + FORMATION ✓";
+      else
+         tooltip += " (No pattern yet)";
       
-      Print("📍 Marked sweep: ", is_sweep_low ? "LOW" : "HIGH", " at ", TimeToString(time), " price=", price);
+      ObjectSetString(0, marker_name, OBJPROP_TEXT, tooltip);
+   }
+}
+
+//+------------------------------------------------------------------+
+void ScanHistoricalSweeps()
+{
+   if(!Show_Historical_Sweeps)
+      return;
+   
+   Print("🔍 Scanning historical sweeps...");
+   
+   datetime time[];
+   double open[], high[], low[], close[];
+   
+   ArraySetAsSeries(time, true);
+   ArraySetAsSeries(open, true);
+   ArraySetAsSeries(high, true);
+   ArraySetAsSeries(low, true);
+   ArraySetAsSeries(close, true);
+   
+   int bars = MathMin(Historical_Sweep_Bars, Bars(_Symbol, PERIOD_CURRENT) - 10);
+   
+   if(CopyTime(_Symbol, PERIOD_CURRENT, 0, bars, time) <= 0) return;
+   if(CopyOpen(_Symbol, PERIOD_CURRENT, 0, bars, open) <= 0) return;
+   if(CopyHigh(_Symbol, PERIOD_CURRENT, 0, bars, high) <= 0) return;
+   if(CopyLow(_Symbol, PERIOD_CURRENT, 0, bars, low) <= 0) return;
+   if(CopyClose(_Symbol, PERIOD_CURRENT, 0, bars, close) <= 0) return;
+   
+   int sweep_low_count = 0;
+   int sweep_high_count = 0;
+   int formation_count = 0;
+   
+   // Quét từ nến cũ đến mới (bỏ qua 10 nến đầu để có đủ dữ liệu cho pattern)
+   for(int i = bars - 10; i >= 1; i--)
+   {
+      // Check for sweep low (tín hiệu MUA)
+      if(IsSweepCandle(open, high, low, close, i, true))
+      {
+         bool has_formation = IsBottomFormation(open, high, low, close, i);
+         MarkSweepCandle(time[i], low[i], true, has_formation);
+         sweep_low_count++;
+         if(has_formation) formation_count++;
+      }
+      
+      // Check for sweep high (tín hiệu BÁN)
+      if(IsSweepCandle(open, high, low, close, i, false))
+      {
+         bool has_formation = IsTopFormation(open, high, low, close, i);
+         MarkSweepCandle(time[i], high[i], false, has_formation);
+         sweep_high_count++;
+         if(has_formation) formation_count++;
+      }
+   }
+   
+   Print("✅ Historical sweep scan complete:");
+   Print("   Sweep Lows: ", sweep_low_count);
+   Print("   Sweep Highs: ", sweep_high_count);
+   Print("   With Formation: ", formation_count);
+   Print("   Total markers: ", sweep_low_count + sweep_high_count);
+}
+
+//+------------------------------------------------------------------+
+void DeleteSweepMarkers()
+{
+   int total = ObjectsTotal(0, 0, OBJ_ARROW);
+   for(int i = total - 1; i >= 0; i--)
+   {
+      string name = ObjectName(0, i, 0, OBJ_ARROW);
+      if(StringFind(name, sweep_prefix) >= 0)
+         ObjectDelete(0, name);
    }
 }
 
