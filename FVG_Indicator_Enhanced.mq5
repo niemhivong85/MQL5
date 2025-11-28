@@ -45,6 +45,32 @@ input int      Sweep_Candles_Count = 5;        // N cây nến sau sweep để t
 input bool     Enable_Alert = true;             // Bật thông báo
 input bool     Enable_Sound = true;             // Bật âm thanh
 input string   Alert_Sound = "alert.wav";       // File âm thanh
+input bool     Zone_Mitigate_On_Touch = true;  // Giảm zone khi giá chạm (như FVG)
+input bool     Zone_Delete_On_Break = true;    // Xóa zone khi giá break
+
+input group    "=== Stop Loss Settings ==="
+input bool     SL_Use_Sweep_Low = true;        // SL dưới cây sweep (BUY) / trên sweep (SELL)
+input bool     SL_Use_Zone_Edge = false;       // SL dưới zone (BUY) / trên zone (SELL)
+input int      SL_Buffer_Points = 5;           // Thêm buffer cho SL (points)
+
+input group    "=== Position Sizing ==="
+input double   Risk_Amount_Per_Trade = 100.0;  // Số tiền rủi ro mỗi lệnh ($)
+input bool     Auto_Calculate_Lot = true;      // Tự động tính lot size
+input double   Manual_Lot_Size = 0.01;         // Lot size thủ công (nếu không auto)
+
+input group    "=== Take Profit - EMA Trailing ==="
+input bool     Use_EMA_Exit = true;            // Chốt lời theo EMA
+input int      EMA_Period = 20;                // Chu kỳ EMA
+input ENUM_TIMEFRAMES EMA_Timeframe = PERIOD_CURRENT; // Timeframe EMA
+
+input group    "=== Take Profit - Risk Reward ==="
+input bool     Use_RR_Exit = true;             // Chốt lời theo RR
+input double   RR_Level_1 = 1.0;               // R đầu tiên
+input double   RR_Close_Percent_1 = 50.0;      // % đóng ở 1R
+input double   RR_Level_2 = 2.0;               // R thứ hai
+input double   RR_Close_Percent_2 = 30.0;      // % đóng ở 2R
+input double   RR_Level_3 = 3.0;               // R thứ ba
+input double   RR_Close_Percent_3 = 20.0;      // % đóng ở 3R (còn lại)
 
 input group    "=== Button & Zone Colors ==="
 input color    Buy_Zone_Color = clrDodgerBlue;
@@ -53,6 +79,8 @@ input color    Button_Buy_Color = clrLimeGreen;
 input color    Button_Sell_Color = clrRed;
 input color    Button_Confirm_Color = clrGold;
 input color    Button_Edit_Color = clrOrange;
+input color    SL_Line_Color = clrRed;
+input color    TP_Line_Color = clrGreen;
 input int      Zone_Transparency = 70;
 
 //--- Structures
@@ -84,12 +112,24 @@ struct TradingZone
 {
    double   top;
    double   bottom;
+   double   original_top;
+   double   original_bottom;
    bool     is_active;
    bool     is_locked;
    bool     is_buy_zone;
    string   rect_name;
    bool     signal_triggered;
    datetime last_check_time;
+   int      sweep_bar_index;
+   double   sweep_low;
+   double   sweep_high;
+   double   stop_loss_price;
+   double   entry_price;
+   double   lot_size;
+   double   tp1_price;
+   double   tp2_price;
+   double   tp3_price;
+   bool     order_placed;
 };
 
 //--- Global variables
@@ -107,6 +147,10 @@ TradingZone sell_zone;
 bool creating_buy_zone = false;
 bool creating_sell_zone = false;
 datetime last_chart_event = 0;
+
+// EMA Handle
+int ema_handle = INVALID_HANDLE;
+double ema_buffer[];
 
 // Button names
 string btn_buy = button_prefix + "BUY";
@@ -134,6 +178,13 @@ bool IsSweepCandle(const double &open[], const double &high[], const double &low
 bool IsBottomFormation(const double &open[], const double &high[], const double &low[], const double &close[], int sweep_index);
 bool IsTopFormation(const double &open[], const double &high[], const double &low[], const double &close[], int sweep_index);
 void SendAlert(string message);
+void UpdateZoneMitigation(TradingZone &zone, const double &high[], const double &low[], const double &close[]);
+void CalculateStopLoss(TradingZone &zone, const double &high[], const double &low[]);
+double CalculateLotSize(double stop_loss_points);
+void DrawTradeLevels(TradingZone &zone);
+void ExecuteTrade(TradingZone &zone);
+bool CheckEMAExit(bool is_buy_position);
+void UpdateTrailingStop(TradingZone &zone);
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -151,16 +202,46 @@ int OnInit()
    buy_zone.is_buy_zone = true;
    buy_zone.rect_name = zone_prefix + "BUY";
    buy_zone.signal_triggered = false;
+   buy_zone.order_placed = false;
    buy_zone.top = 0;
    buy_zone.bottom = 0;
+   buy_zone.original_top = 0;
+   buy_zone.original_bottom = 0;
+   buy_zone.sweep_bar_index = -1;
+   buy_zone.sweep_low = 0;
+   buy_zone.sweep_high = 0;
+   buy_zone.stop_loss_price = 0;
+   buy_zone.entry_price = 0;
+   buy_zone.lot_size = 0;
    
    sell_zone.is_active = false;
    sell_zone.is_locked = false;
    sell_zone.is_buy_zone = false;
    sell_zone.rect_name = zone_prefix + "SELL";
    sell_zone.signal_triggered = false;
+   sell_zone.order_placed = false;
    sell_zone.top = 0;
    sell_zone.bottom = 0;
+   sell_zone.original_top = 0;
+   sell_zone.original_bottom = 0;
+   sell_zone.sweep_bar_index = -1;
+   sell_zone.sweep_low = 0;
+   sell_zone.sweep_high = 0;
+   sell_zone.stop_loss_price = 0;
+   sell_zone.entry_price = 0;
+   sell_zone.lot_size = 0;
+   
+   // Initialize EMA
+   if(Use_EMA_Exit)
+   {
+      ema_handle = iMA(_Symbol, EMA_Timeframe, EMA_Period, 0, MODE_EMA, PRICE_CLOSE);
+      if(ema_handle == INVALID_HANDLE)
+      {
+         Print("Failed to create EMA indicator handle");
+         return(INIT_FAILED);
+      }
+      ArraySetAsSeries(ema_buffer, true);
+   }
    
    CreateButtons();
    ChartSetInteger(0, CHART_EVENT_MOUSE_MOVE, true);
@@ -173,6 +254,9 @@ int OnInit()
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
+   if(ema_handle != INVALID_HANDLE)
+      IndicatorRelease(ema_handle);
+   
    DeleteAllObjects();
 }
 
@@ -259,13 +343,37 @@ int OnCalculate(const int rates_total,
    
    UpdateFVGStatus(time, high, low, close);
    
+   // Update zone mitigation (like FVG)
+   if(buy_zone.is_active && buy_zone.is_locked)
+      UpdateZoneMitigation(buy_zone, high, low, close);
+   
+   if(sell_zone.is_active && sell_zone.is_locked)
+      UpdateZoneMitigation(sell_zone, high, low, close);
+   
    // Check trading zones for sweep patterns
    if(buy_zone.is_active && buy_zone.is_locked && !buy_zone.signal_triggered)
    {
       if(CheckSweepAndPattern(time, open, high, low, close, true))
       {
          buy_zone.signal_triggered = true;
-         SendAlert("BUY SIGNAL: Sweep + Bottom Formation detected!");
+         CalculateStopLoss(buy_zone, high, low);
+         buy_zone.entry_price = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
+         
+         double sl_points = MathAbs(buy_zone.entry_price - buy_zone.stop_loss_price) / _Point;
+         buy_zone.lot_size = CalculateLotSize(sl_points);
+         
+         // Calculate TP levels based on RR
+         double risk_distance = buy_zone.entry_price - buy_zone.stop_loss_price;
+         buy_zone.tp1_price = buy_zone.entry_price + (risk_distance * RR_Level_1);
+         buy_zone.tp2_price = buy_zone.entry_price + (risk_distance * RR_Level_2);
+         buy_zone.tp3_price = buy_zone.entry_price + (risk_distance * RR_Level_3);
+         
+         DrawTradeLevels(buy_zone);
+         
+         string msg = StringFormat("BUY SIGNAL\nEntry: %.5f\nSL: %.5f (%.1f pts)\nLot: %.2f\nTP1: %.5f | TP2: %.5f | TP3: %.5f",
+                                   buy_zone.entry_price, buy_zone.stop_loss_price, sl_points,
+                                   buy_zone.lot_size, buy_zone.tp1_price, buy_zone.tp2_price, buy_zone.tp3_price);
+         SendAlert(msg);
       }
    }
    
@@ -274,7 +382,24 @@ int OnCalculate(const int rates_total,
       if(CheckSweepAndPattern(time, open, high, low, close, false))
       {
          sell_zone.signal_triggered = true;
-         SendAlert("SELL SIGNAL: Sweep + Top Formation detected!");
+         CalculateStopLoss(sell_zone, high, low);
+         sell_zone.entry_price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
+         
+         double sl_points = MathAbs(sell_zone.stop_loss_price - sell_zone.entry_price) / _Point;
+         sell_zone.lot_size = CalculateLotSize(sl_points);
+         
+         // Calculate TP levels based on RR
+         double risk_distance = sell_zone.stop_loss_price - sell_zone.entry_price;
+         sell_zone.tp1_price = sell_zone.entry_price - (risk_distance * RR_Level_1);
+         sell_zone.tp2_price = sell_zone.entry_price - (risk_distance * RR_Level_2);
+         sell_zone.tp3_price = sell_zone.entry_price - (risk_distance * RR_Level_3);
+         
+         DrawTradeLevels(sell_zone);
+         
+         string msg = StringFormat("SELL SIGNAL\nEntry: %.5f\nSL: %.5f (%.1f pts)\nLot: %.2f\nTP1: %.5f | TP2: %.5f | TP3: %.5f",
+                                   sell_zone.entry_price, sell_zone.stop_loss_price, sl_points,
+                                   sell_zone.lot_size, sell_zone.tp1_price, sell_zone.tp2_price, sell_zone.tp3_price);
+         SendAlert(msg);
       }
    }
    
@@ -428,9 +553,12 @@ void CreateTradingZone(bool is_buy)
       zone.bottom = current_price + 50 * _Point;
    }
    
+   zone.original_top = zone.top;
+   zone.original_bottom = zone.bottom;
    zone.is_active = true;
    zone.is_locked = false;
    zone.signal_triggered = false;
+   zone.order_placed = false;
    
    DrawTradingZone(zone);
 }
@@ -512,14 +640,30 @@ void UnlockTradingZones()
    {
       buy_zone.is_locked = false;
       buy_zone.signal_triggered = false;
+      buy_zone.order_placed = false;
       ObjectSetInteger(0, buy_zone.rect_name, OBJPROP_SELECTABLE, true);
+      
+      // Delete trade level lines
+      ObjectDelete(0, "BUY_SL_LINE");
+      ObjectDelete(0, "BUY_TP1_LINE");
+      ObjectDelete(0, "BUY_TP2_LINE");
+      ObjectDelete(0, "BUY_TP3_LINE");
+      ObjectDelete(0, "BUY_ENTRY_LINE");
    }
    
    if(sell_zone.is_active)
    {
       sell_zone.is_locked = false;
       sell_zone.signal_triggered = false;
+      sell_zone.order_placed = false;
       ObjectSetInteger(0, sell_zone.rect_name, OBJPROP_SELECTABLE, true);
+      
+      // Delete trade level lines
+      ObjectDelete(0, "SELL_SL_LINE");
+      ObjectDelete(0, "SELL_TP1_LINE");
+      ObjectDelete(0, "SELL_TP2_LINE");
+      ObjectDelete(0, "SELL_TP3_LINE");
+      ObjectDelete(0, "SELL_ENTRY_LINE");
    }
    
    Print("Trading zones unlocked for editing");
@@ -561,7 +705,12 @@ bool CheckSweepAndPattern(const datetime &time[], const double &open[], const do
          {
             if(IsBottomFormation(open, high, low, close, i))
             {
-               Print("BUY Signal: Sweep at bar ", i, " + Bottom formation detected!");
+               // Save sweep candle information
+               zone.sweep_bar_index = i;
+               zone.sweep_low = low[i];
+               zone.sweep_high = high[i];
+               
+               Print("BUY Signal: Sweep at bar ", i, " (Low=", low[i], ") + Bottom formation detected!");
                return true;
             }
          }
@@ -569,7 +718,12 @@ bool CheckSweepAndPattern(const datetime &time[], const double &open[], const do
          {
             if(IsTopFormation(open, high, low, close, i))
             {
-               Print("SELL Signal: Sweep at bar ", i, " + Top formation detected!");
+               // Save sweep candle information
+               zone.sweep_bar_index = i;
+               zone.sweep_low = low[i];
+               zone.sweep_high = high[i];
+               
+               Print("SELL Signal: Sweep at bar ", i, " (High=", high[i], ") + Top formation detected!");
                return true;
             }
          }
@@ -709,6 +863,302 @@ void SendAlert(string message)
    }
    
    Print("SIGNAL: ", message);
+}
+
+//+------------------------------------------------------------------+
+void UpdateZoneMitigation(TradingZone &zone, const double &high[], const double &low[], const double &close[])
+{
+   if(!zone.is_active || !zone.is_locked)
+      return;
+   
+   // Check recent bars for mitigation (like FVG)
+   for(int i = 0; i < 5; i++)
+   {
+      bool is_modified = false;
+      
+      if(zone.is_buy_zone)
+      {
+         // For buy zone: check if price touched from below
+         if(Zone_Delete_On_Break && close[i] < zone.bottom)
+         {
+            zone.is_active = false;
+            ObjectDelete(0, zone.rect_name);
+            ObjectDelete(0, zone.rect_name + "_LABEL");
+            Print("Buy zone deleted - price broke below");
+            return;
+         }
+         
+         if(Zone_Mitigate_On_Touch && low[i] < zone.top && low[i] > zone.bottom)
+         {
+            zone.top = low[i];
+            is_modified = true;
+            
+            // If zone becomes too small, delete it
+            if(zone.top - zone.bottom < 10 * _Point)
+            {
+               zone.is_active = false;
+               ObjectDelete(0, zone.rect_name);
+               ObjectDelete(0, zone.rect_name + "_LABEL");
+               Print("Buy zone deleted - fully mitigated");
+               return;
+            }
+         }
+      }
+      else // Sell zone
+      {
+         // For sell zone: check if price touched from above
+         if(Zone_Delete_On_Break && close[i] > zone.top)
+         {
+            zone.is_active = false;
+            ObjectDelete(0, zone.rect_name);
+            ObjectDelete(0, zone.rect_name + "_LABEL");
+            Print("Sell zone deleted - price broke above");
+            return;
+         }
+         
+         if(Zone_Mitigate_On_Touch && high[i] > zone.bottom && high[i] < zone.top)
+         {
+            zone.bottom = high[i];
+            is_modified = true;
+            
+            // If zone becomes too small, delete it
+            if(zone.top - zone.bottom < 10 * _Point)
+            {
+               zone.is_active = false;
+               ObjectDelete(0, zone.rect_name);
+               ObjectDelete(0, zone.rect_name + "_LABEL");
+               Print("Sell zone deleted - fully mitigated");
+               return;
+            }
+         }
+      }
+      
+      if(is_modified)
+      {
+         DrawTradingZone(zone);
+         Print("Zone mitigated - new range: ", zone.top, " - ", zone.bottom);
+      }
+   }
+}
+
+//+------------------------------------------------------------------+
+void CalculateStopLoss(TradingZone &zone, const double &high[], const double &low[])
+{
+   double sl_price = 0;
+   
+   if(zone.is_buy_zone)
+   {
+      // For buy: SL below sweep low or zone bottom
+      if(SL_Use_Sweep_Low && zone.sweep_bar_index > 0)
+      {
+         sl_price = zone.sweep_low - (SL_Buffer_Points * _Point);
+      }
+      else if(SL_Use_Zone_Edge)
+      {
+         sl_price = zone.bottom - (SL_Buffer_Points * _Point);
+      }
+      else
+      {
+         // Default: use zone bottom
+         sl_price = zone.bottom - (SL_Buffer_Points * _Point);
+      }
+   }
+   else // Sell
+   {
+      // For sell: SL above sweep high or zone top
+      if(SL_Use_Sweep_Low && zone.sweep_bar_index > 0)
+      {
+         sl_price = zone.sweep_high + (SL_Buffer_Points * _Point);
+      }
+      else if(SL_Use_Zone_Edge)
+      {
+         sl_price = zone.top + (SL_Buffer_Points * _Point);
+      }
+      else
+      {
+         // Default: use zone top
+         sl_price = zone.top + (SL_Buffer_Points * _Point);
+      }
+   }
+   
+   zone.stop_loss_price = sl_price;
+   Print("Stop Loss calculated: ", sl_price);
+}
+
+//+------------------------------------------------------------------+
+double CalculateLotSize(double stop_loss_points)
+{
+   if(!Auto_Calculate_Lot)
+      return Manual_Lot_Size;
+   
+   // Get symbol specifications
+   double tick_value = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_VALUE);
+   double tick_size = SymbolInfoDouble(_Symbol, SYMBOL_TRADE_TICK_SIZE);
+   double min_lot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MIN);
+   double max_lot = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_MAX);
+   double lot_step = SymbolInfoDouble(_Symbol, SYMBOL_VOLUME_STEP);
+   
+   // Calculate value per point
+   double point_value = tick_value;
+   if(tick_size > 0)
+      point_value = tick_value * (_Point / tick_size);
+   
+   // Calculate lot size based on risk
+   double lot_size = 0;
+   if(stop_loss_points > 0 && point_value > 0)
+   {
+      lot_size = Risk_Amount_Per_Trade / (stop_loss_points * point_value);
+   }
+   
+   // Normalize lot size
+   lot_size = MathFloor(lot_size / lot_step) * lot_step;
+   
+   // Apply limits
+   if(lot_size < min_lot) lot_size = min_lot;
+   if(lot_size > max_lot) lot_size = max_lot;
+   
+   Print("Calculated Lot Size: ", lot_size, " (Risk: $", Risk_Amount_Per_Trade, ", SL: ", stop_loss_points, " pts)");
+   
+   return lot_size;
+}
+
+//+------------------------------------------------------------------+
+void DrawTradeLevels(TradingZone &zone)
+{
+   string prefix = zone.is_buy_zone ? "BUY_" : "SELL_";
+   datetime time_start = iTime(_Symbol, PERIOD_CURRENT, 10);
+   datetime time_end = TimeCurrent() + PeriodSeconds() * 100;
+   
+   // Draw Entry Line
+   string entry_name = prefix + "ENTRY_LINE";
+   if(ObjectFind(0, entry_name) >= 0) ObjectDelete(0, entry_name);
+   if(ObjectCreate(0, entry_name, OBJ_TREND, 0, time_start, zone.entry_price, time_end, zone.entry_price))
+   {
+      ObjectSetInteger(0, entry_name, OBJPROP_COLOR, clrYellow);
+      ObjectSetInteger(0, entry_name, OBJPROP_STYLE, STYLE_SOLID);
+      ObjectSetInteger(0, entry_name, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, entry_name, OBJPROP_RAY_RIGHT, true);
+      ObjectSetString(0, entry_name, OBJPROP_TEXT, "Entry: " + DoubleToString(zone.entry_price, _Digits));
+   }
+   
+   // Draw Stop Loss Line
+   string sl_name = prefix + "SL_LINE";
+   if(ObjectFind(0, sl_name) >= 0) ObjectDelete(0, sl_name);
+   if(ObjectCreate(0, sl_name, OBJ_TREND, 0, time_start, zone.stop_loss_price, time_end, zone.stop_loss_price))
+   {
+      ObjectSetInteger(0, sl_name, OBJPROP_COLOR, SL_Line_Color);
+      ObjectSetInteger(0, sl_name, OBJPROP_STYLE, STYLE_DOT);
+      ObjectSetInteger(0, sl_name, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, sl_name, OBJPROP_RAY_RIGHT, true);
+      ObjectSetString(0, sl_name, OBJPROP_TEXT, "SL: " + DoubleToString(zone.stop_loss_price, _Digits));
+   }
+   
+   // Draw TP Lines
+   if(Use_RR_Exit)
+   {
+      // TP1
+      string tp1_name = prefix + "TP1_LINE";
+      if(ObjectFind(0, tp1_name) >= 0) ObjectDelete(0, tp1_name);
+      if(ObjectCreate(0, tp1_name, OBJ_TREND, 0, time_start, zone.tp1_price, time_end, zone.tp1_price))
+      {
+         ObjectSetInteger(0, tp1_name, OBJPROP_COLOR, TP_Line_Color);
+         ObjectSetInteger(0, tp1_name, OBJPROP_STYLE, STYLE_DASH);
+         ObjectSetInteger(0, tp1_name, OBJPROP_WIDTH, 1);
+         ObjectSetInteger(0, tp1_name, OBJPROP_RAY_RIGHT, true);
+         ObjectSetString(0, tp1_name, OBJPROP_TEXT, StringFormat("TP1 (%.1fR): %.5f [%g%%]", RR_Level_1, zone.tp1_price, RR_Close_Percent_1));
+      }
+      
+      // TP2
+      string tp2_name = prefix + "TP2_LINE";
+      if(ObjectFind(0, tp2_name) >= 0) ObjectDelete(0, tp2_name);
+      if(ObjectCreate(0, tp2_name, OBJ_TREND, 0, time_start, zone.tp2_price, time_end, zone.tp2_price))
+      {
+         ObjectSetInteger(0, tp2_name, OBJPROP_COLOR, TP_Line_Color);
+         ObjectSetInteger(0, tp2_name, OBJPROP_STYLE, STYLE_DASH);
+         ObjectSetInteger(0, tp2_name, OBJPROP_WIDTH, 1);
+         ObjectSetInteger(0, tp2_name, OBJPROP_RAY_RIGHT, true);
+         ObjectSetString(0, tp2_name, OBJPROP_TEXT, StringFormat("TP2 (%.1fR): %.5f [%g%%]", RR_Level_2, zone.tp2_price, RR_Close_Percent_2));
+      }
+      
+      // TP3
+      string tp3_name = prefix + "TP3_LINE";
+      if(ObjectFind(0, tp3_name) >= 0) ObjectDelete(0, tp3_name);
+      if(ObjectCreate(0, tp3_name, OBJ_TREND, 0, time_start, zone.tp3_price, time_end, zone.tp3_price))
+      {
+         ObjectSetInteger(0, tp3_name, OBJPROP_COLOR, TP_Line_Color);
+         ObjectSetInteger(0, tp3_name, OBJPROP_STYLE, STYLE_DASH);
+         ObjectSetInteger(0, tp3_name, OBJPROP_WIDTH, 1);
+         ObjectSetInteger(0, tp3_name, OBJPROP_RAY_RIGHT, true);
+         ObjectSetString(0, tp3_name, OBJPROP_TEXT, StringFormat("TP3 (%.1fR): %.5f [%g%%]", RR_Level_3, zone.tp3_price, RR_Close_Percent_3));
+      }
+   }
+   
+   ChartRedraw();
+}
+
+//+------------------------------------------------------------------+
+void ExecuteTrade(TradingZone &zone)
+{
+   // This function would place actual trades
+   // For now, it just displays information
+   Print("Trade ready to execute:");
+   Print("  Type: ", zone.is_buy_zone ? "BUY" : "SELL");
+   Print("  Entry: ", zone.entry_price);
+   Print("  Stop Loss: ", zone.stop_loss_price);
+   Print("  Lot Size: ", zone.lot_size);
+   Print("  TP1: ", zone.tp1_price);
+   Print("  TP2: ", zone.tp2_price);
+   Print("  TP3: ", zone.tp3_price);
+}
+
+//+------------------------------------------------------------------+
+bool CheckEMAExit(bool is_buy_position)
+{
+   if(!Use_EMA_Exit || ema_handle == INVALID_HANDLE)
+      return false;
+   
+   // Copy EMA values
+   if(CopyBuffer(ema_handle, 0, 0, 3, ema_buffer) <= 0)
+      return false;
+   
+   double current_close = iClose(_Symbol, PERIOD_CURRENT, 0);
+   double ema_value = ema_buffer[0];
+   
+   if(is_buy_position)
+   {
+      // Exit buy if close below EMA
+      if(current_close < ema_value)
+      {
+         Print("EMA Exit signal for BUY: Close=", current_close, " < EMA=", ema_value);
+         return true;
+      }
+   }
+   else
+   {
+      // Exit sell if close above EMA
+      if(current_close > ema_value)
+      {
+         Print("EMA Exit signal for SELL: Close=", current_close, " > EMA=", ema_value);
+         return true;
+      }
+   }
+   
+   return false;
+}
+
+//+------------------------------------------------------------------+
+void UpdateTrailingStop(TradingZone &zone)
+{
+   // This function would update trailing stop based on EMA
+   // Can be called from OnCalculate to monitor open positions
+   if(!zone.order_placed)
+      return;
+   
+   if(CheckEMAExit(zone.is_buy_zone))
+   {
+      Print("EMA exit triggered - close position");
+      SendAlert("EMA Exit: Close " + (zone.is_buy_zone ? "BUY" : "SELL") + " position");
+   }
 }
 
 //+------------------------------------------------------------------+
