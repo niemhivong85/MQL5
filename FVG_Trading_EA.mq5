@@ -87,15 +87,16 @@ input bool     Auto_Trade = true;
 input string   Trade_Comment = "FVG_EA";
 
 input group    "=== Button & Zone Colors ==="
-input color    Buy_Zone_Color = clrDodgerBlue;
-input color    Sell_Zone_Color = clrOrangeRed;
+input color    Buy_Zone_Color = clrDodgerBlue;       // Màu vùng MUA (có thể đổi)
+input color    Sell_Zone_Color = clrOrangeRed;       // Màu vùng BÁN (có thể đổi)
 input color    Button_Buy_Color = clrLimeGreen;
 input color    Button_Sell_Color = clrRed;
 input color    Button_Confirm_Color = clrGold;
 input color    Button_Edit_Color = clrOrange;
 input color    SL_Line_Color = clrRed;
 input color    TP_Line_Color = clrGreen;
-input int      Zone_Transparency = 70;
+input int      Zone_Transparency = 70;               // Độ trong suốt vùng (0-100)
+input int      Zone_Border_Width = 3;                // Độ dày viền vùng (dễ kéo hơn)
 
 //--- Structures
 struct FVG_Structure
@@ -692,10 +693,14 @@ void CreateTradingZone(bool is_buy)
 {
    double current_price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    
+   // Tạo zone LỚN HƠN để dễ nhìn và dễ kéo (200 points thay vì 100)
+   double zone_height = 200 * _Point;
+   
    if(is_buy)
    {
-      buy_zone.top = current_price - 50 * _Point;
-      buy_zone.bottom = current_price - 150 * _Point;
+      // Buy zone: dưới giá hiện tại
+      buy_zone.top = current_price - 100 * _Point;
+      buy_zone.bottom = current_price - 300 * _Point;
       buy_zone.original_top = buy_zone.top;
       buy_zone.original_bottom = buy_zone.bottom;
       buy_zone.is_active = true;
@@ -708,11 +713,13 @@ void CreateTradingZone(bool is_buy)
       buy_zone.tp3_hit = false;
       
       DrawTradingZone(buy_zone);
+      Print("✅ Buy zone created: ", buy_zone.top, " - ", buy_zone.bottom);
    }
    else
    {
-      sell_zone.top = current_price + 150 * _Point;
-      sell_zone.bottom = current_price + 50 * _Point;
+      // Sell zone: trên giá hiện tại
+      sell_zone.top = current_price + 300 * _Point;
+      sell_zone.bottom = current_price + 100 * _Point;
       sell_zone.original_top = sell_zone.top;
       sell_zone.original_bottom = sell_zone.bottom;
       sell_zone.is_active = true;
@@ -725,6 +732,7 @@ void CreateTradingZone(bool is_buy)
       sell_zone.tp3_hit = false;
       
       DrawTradingZone(sell_zone);
+      Print("✅ Sell zone created: ", sell_zone.top, " - ", sell_zone.bottom);
    }
 }
 
@@ -742,14 +750,19 @@ void DrawTradingZone(TradingZone &zone)
    if(ObjectCreate(0, name, OBJ_RECTANGLE, 0, time_start, zone.top, time_end, zone.bottom))
    {
       color zone_color = zone.is_buy_zone ? Buy_Zone_Color : Sell_Zone_Color;
+      
+      // VIỀN DÀY HƠN để dễ kéo
       ObjectSetInteger(0, name, OBJPROP_COLOR, zone_color);
       ObjectSetInteger(0, name, OBJPROP_FILL, true);
       ObjectSetInteger(0, name, OBJPROP_BACK, false);
-      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, !zone.is_locked);
+      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, !zone.is_locked);  // Có thể chọn khi chưa lock
+      ObjectSetInteger(0, name, OBJPROP_SELECTED, false);
       ObjectSetInteger(0, name, OBJPROP_HIDDEN, false);
       ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_SOLID);
-      ObjectSetInteger(0, name, OBJPROP_WIDTH, 2);
+      ObjectSetInteger(0, name, OBJPROP_WIDTH, Zone_Border_Width);     // Viền dày = dễ kéo
+      ObjectSetInteger(0, name, OBJPROP_ZORDER, 0);                   // Ưu tiên hiển thị
       
+      // Apply transparency
       int r = (zone_color & 0xFF);
       int g = ((zone_color >> 8) & 0xFF);
       int b = ((zone_color >> 16) & 0xFF);
@@ -761,19 +774,29 @@ void DrawTradingZone(TradingZone &zone)
       
       ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg_color);
       
+      // Label lớn hơn, rõ hơn
       string label_name = name + "_LABEL";
       if(ObjectFind(0, label_name) >= 0)
          ObjectDelete(0, label_name);
          
       if(ObjectCreate(0, label_name, OBJ_TEXT, 0, time_start, zone.top))
       {
-         ObjectSetString(0, label_name, OBJPROP_TEXT, zone.is_buy_zone ? "  BUY ZONE" : "  SELL ZONE");
+         string label_text = zone.is_buy_zone ? "  🔵 BUY ZONE (Kéo để di chuyển)" : "  🔴 SELL ZONE (Kéo để di chuyển)";
+         if(zone.is_locked)
+            label_text = zone.is_buy_zone ? "  🔵 BUY ZONE [LOCKED]" : "  🔴 SELL ZONE [LOCKED]";
+            
+         ObjectSetString(0, label_name, OBJPROP_TEXT, label_text);
          ObjectSetInteger(0, label_name, OBJPROP_COLOR, zone_color);
-         ObjectSetInteger(0, label_name, OBJPROP_FONTSIZE, 10);
+         ObjectSetInteger(0, label_name, OBJPROP_FONTSIZE, 12);  // Lớn hơn
          ObjectSetString(0, label_name, OBJPROP_FONT, "Arial Bold");
          ObjectSetInteger(0, label_name, OBJPROP_ANCHOR, ANCHOR_LEFT);
       }
    }
+   
+   ChartRedraw();
+   
+   if(!zone.is_locked)
+      Print("💡 Zone có thể kéo. Click và drag viền để di chuyển!");
 }
 
 //+------------------------------------------------------------------+

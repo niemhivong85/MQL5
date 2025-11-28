@@ -1,0 +1,165 @@
+========================================================================
+                   ⚠️ PHÂN BIỆT EA VÀ INDICATOR ⚠️
+========================================================================
+
+BẠN ĐANG DÙNG FILE NÀO? CHECK NGAY!
+
+========================================================================
+📊 INDICATOR (CHỈ HIỂN THỊ - KHÔNG TỰ ĐỘNG VÀO LỆNH)
+========================================================================
+
+File Name:    FVG_Indicator_Enhanced.mq5
+Folder:       MT5/MQL5/Indicators/
+Icon:         📊 (chart icon)
+Size:         ~51KB
+
+Đặc điểm:
+  ❌ KHÔNG tự động vào lệnh
+  ❌ KHÔNG có CTrade
+  ❌ KHÔNG quản lý positions
+  ✅ Chỉ alert
+  ✅ Vẽ zones và levels
+  ✅ Phát hiện patterns
+  
+Code có:
+  - #property indicator_chart_window
+  - OnCalculate()
+  - KHÔNG có #include <Trade\Trade.mqh>
+  - KHÔNG có trade.Buy() / trade.Sell()
+
+Khi attach:
+  - Trong Navigator → Indicators
+  - Không cần "Allow Algo Trading"
+  - Không có "Auto_Trade" parameter
+
+========================================================================
+🤖 EXPERT ADVISOR (TỰ ĐỘNG VÀO LỆNH)
+========================================================================
+
+File Name:    FVG_Trading_EA.mq5     ⭐⭐⭐
+Folder:       MT5/MQL5/Experts/
+Icon:         🤖 (robot icon)
+Size:         ~44KB
+
+Đặc điểm:
+  ✅ TỰ ĐỘNG vào lệnh
+  ✅ Có CTrade object
+  ✅ Quản lý positions
+  ✅ Partial close TP1/TP2/TP3
+  ✅ EMA trailing exit
+  ✅ Alert + Trade
+  
+Code có:
+  - #include <Trade\Trade.mqh>
+  - CTrade trade;
+  - OnTick()
+  - trade.Buy() / trade.Sell()
+  - ExecuteTrade()
+  - ManagePositions()
+
+Khi attach:
+  - Trong Navigator → Experts
+  - CẦN "Allow Algo Trading" ✅
+  - CÓ parameter "Auto_Trade = true"
+
+========================================================================
+                         CÁCH KIỂM TRA
+========================================================================
+
+1. MỞ METATRADER 5
+2. BẤM F4 (MetaEditor)
+3. NAVIGATOR → Tìm file bạn đang dùng
+
+Nếu thấy:
+  📁 Indicators
+    └─ FVG_Indicator_Enhanced
+    
+  → BẠN ĐANG DÙNG INDICATOR (SAI nếu muốn auto trade)
+
+Nếu thấy:
+  📁 Experts
+    └─ FVG_Trading_EA
+    
+  → BẠN ĐANG DÙNG EA (ĐÚNG cho auto trade)
+
+========================================================================
+                    NẾU BẠN MUỐN TỰ ĐỘNG VÀO LỆNH
+========================================================================
+
+PHẢI DÙNG:  FVG_Trading_EA.mq5
+
+Các bước:
+  1. Copy FVG_Trading_EA.mq5 vào MT5/MQL5/Experts/
+  2. Compile trong MetaEditor (F7)
+  3. Kéo vào chart TỪ Navigator → Experts
+  4. Tab "Common" → ✅ Allow Algo Trading
+  5. Tab "Inputs" → Auto_Trade = true
+  6. Bấm OK
+
+========================================================================
+                        CẢI TIẾN ĐÃ THÊM
+========================================================================
+
+✅ ZONE LỚN HƠN:
+  - Trước: 100 points
+  - Bây giờ: 200 points (dễ nhìn, dễ kéo)
+
+✅ VIỀN DÀY HƠN:
+  - Parameter: Zone_Border_Width = 3
+  - Có thể tăng lên 5 hoặc 10 để dễ kéo hơn
+
+✅ MÀU CÓ THỂ ĐỔI:
+  - Buy_Zone_Color = chọn màu tùy thích
+  - Sell_Zone_Color = chọn màu tùy thích
+
+✅ LABEL RÕ HƠN:
+  - "🔵 BUY ZONE (Kéo để di chuyển)"
+  - Font size 12 (lớn hơn)
+
+✅ HƯỚNG DẪN:
+  - Print ra log cách kéo
+  - Tooltip trong label
+
+========================================================================
+                      CÁCH KÉO ZONE DỄ NHẤT
+========================================================================
+
+Cách 1: KÉO BẰNG CHUỘT
+  1. Click vào VIỀN (không phải bên trong)
+  2. Giữ chuột
+  3. Kéo lên/xuống
+  4. Nhả chuột
+
+Cách 2: EDIT THỦ CÔNG (DỄ NHẤT)
+  1. Right-click chart
+  2. Objects → Objects List
+  3. Tìm "ZONE_BUY" hoặc "ZONE_SELL"
+  4. Double-click
+  5. Thay đổi Price 1 và Price 2
+  6. OK
+
+Cách 3: TĂNG ĐỘ DÀY VIỀN
+  1. EA Properties → Inputs
+  2. Zone_Border_Width = 10
+  3. Viền dày = dễ click
+
+========================================================================
+                         KẾT LUẬN
+========================================================================
+
+NẾU BẠN MUỐN:
+  - Tự động vào lệnh → Dùng FVG_Trading_EA.mq5 (Expert)
+  - Chỉ alert, vào thủ công → Dùng FVG_Indicator_Enhanced.mq5 (Indicator)
+
+HIỆN TẠI BẠN ĐANG DÙNG:
+  [ ] FVG_Trading_EA.mq5 (Expert Advisor) ✅ ĐÚNG
+  [ ] FVG_Indicator_Enhanced.mq5 (Indicator) ❌ SAI nếu muốn auto
+
+CHECK FILE TRONG:
+  - MetaEditor → Navigator
+  - Hoặc folder: MT5/MQL5/Experts/ (EA) vs MT5/MQL5/Indicators/
+
+========================================================================
+File: PHAN_BIET_EA_VA_INDICATOR.txt
+Mục đích: Giúp phân biệt EA và Indicator
+========================================================================
