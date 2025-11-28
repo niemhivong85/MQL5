@@ -60,6 +60,7 @@ input bool     Zone_Mitigate_On_Touch = true;
 input bool     Zone_Delete_On_Break = true;
 
 input group    "=== Sweep Detection Display ==="
+input bool     Show_Sweep_Markers = true;         // Bật/tắt đánh dấu sweep
 input bool     Show_Historical_Sweeps = true;     // Hiển thị sweep lịch sử
 input int      Historical_Sweep_Bars = 500;       // Số nến quét lại
 input bool     Mark_Sweep_With_Formation = true;  // Đánh dấu sweep CÓ formation
@@ -1052,39 +1053,27 @@ bool IsSweepCandle(const double &open[], const double &high[], const double &low
    
    if(check_for_buy)
    {
+      // SWEEP ĐÁY (LOW) - Tín hiệu MUA
+      // Điều kiện 1: Low[sweep] < Low[trước đó]
       if(low[index] >= low[index + 1])
          return false;
       
-      bool is_bearish = close[index] < open[index];
-      
-      if(is_bearish)
-      {
-         if(close[index] >= close[index + 1])
-            return true;
-      }
-      else
-      {
-         if(close[index] >= open[index + 1])
-            return true;
-      }
+      // Điều kiện 2: Close[sweep] > MIN(Close[trước], Open[trước])
+      double min_prev = MathMin(close[index + 1], open[index + 1]);
+      if(close[index] > min_prev)
+         return true;
    }
    else
    {
+      // SWEEP ĐỈNH (HIGH) - Tín hiệu BÁN
+      // Điều kiện 1: High[sweep] > High[trước đó]
       if(high[index] <= high[index + 1])
          return false;
       
-      bool is_bullish = close[index] > open[index];
-      
-      if(is_bullish)
-      {
-         if(close[index] <= close[index + 1])
-            return true;
-      }
-      else
-      {
-         if(close[index] <= open[index + 1])
-            return true;
-      }
+      // Điều kiện 2: Close[sweep] < MAX(Close[trước], Open[trước])
+      double max_prev = MathMax(close[index + 1], open[index + 1]);
+      if(close[index] < max_prev)
+         return true;
    }
    
    return false;
@@ -1151,6 +1140,10 @@ void SendAlert(string message)
 //+------------------------------------------------------------------+
 void MarkSweepCandle(datetime time, double price, bool is_sweep_low, bool has_formation)
 {
+   // Kiểm tra nếu tắt marker
+   if(!Show_Sweep_Markers)
+      return;
+   
    // Kiểm tra option hiển thị
    if(has_formation && !Mark_Sweep_With_Formation)
       return;  // Không hiện sweep có formation
@@ -1228,7 +1221,7 @@ void MarkSweepCandle(datetime time, double price, bool is_sweep_low, bool has_fo
 //+------------------------------------------------------------------+
 void ScanHistoricalSweeps()
 {
-   if(!Show_Historical_Sweeps)
+   if(!Show_Sweep_Markers || !Show_Historical_Sweeps)
       return;
    
    Print("🔍 Scanning historical sweeps...");
