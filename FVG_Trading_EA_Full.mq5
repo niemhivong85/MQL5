@@ -59,6 +59,15 @@ input string   Alert_Sound = "alert.wav";
 input bool     Zone_Mitigate_On_Touch = true;
 input bool     Zone_Delete_On_Break = true;
 
+input group    "=== Sweep Detection Display ==="
+input bool     Show_Historical_Sweeps = true;     // Hiển thị sweep lịch sử
+input int      Historical_Sweep_Bars = 500;       // Số nến quét lại
+input bool     Mark_Sweep_With_Formation = true;  // Đánh dấu sweep CÓ formation
+input bool     Mark_Sweep_Without_Formation = false; // Đánh dấu sweep CHƯA có formation
+input color    Sweep_Buy_Color = clrLime;         // Màu mũi tên BUY (sweep low)
+input color    Sweep_Sell_Color = clrRed;         // Màu mũi tên SELL (sweep high)
+input int      Sweep_Arrow_Size = 2;              // Kích thước mũi tên
+
 input group    "=== Stop Loss Settings ==="
 input bool     SL_Use_Sweep_Low = true;
 input bool     SL_Use_Zone_Edge = false;
