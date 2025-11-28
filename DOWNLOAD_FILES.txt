@@ -1,0 +1,197 @@
+========================================================================
+              📥 HƯỚNG DẪN DOWNLOAD FILES
+========================================================================
+
+BẠN CẦN DOWNLOAD CÁC FILE SAU:
+
+========================================================================
+              🤖 EXPERT ADVISOR (TỰ ĐỘNG VÀO LỆNH)
+========================================================================
+
+FILE CHÍNH:
+-----------
+✅ FVG_Trading_EA.mq5          (Size: ~44-50KB)
+
+KIỂM TRA FILE NÀY LÀ EA:
+- Có dòng: #include <Trade\Trade.mqh>
+- Có dòng: CTrade trade;
+- Có function: void OnTick()
+- KHÔNG có: #property indicator_chart_window
+- KHÔNG có: OnCalculate()
+
+COPY VÀO:
+---------
+MT5/MQL5/Experts/FVG_Trading_EA.mq5
+
+========================================================================
+              📊 INDICATOR (CHỈ ALERT - KHÔNG TỰ ĐỘNG)
+========================================================================
+
+FILE PHỤ (Nếu muốn manual trading):
+------------------------------------
+❌ FVG_Indicator_Enhanced.mq5  (Size: ~51KB)
+
+KIỂM TRA FILE NÀY LÀ INDICATOR:
+- Có dòng: #property indicator_chart_window
+- Có function: int OnCalculate()
+- KHÔNG có: #include <Trade\Trade.mqh>
+- KHÔNG có: CTrade trade;
+
+COPY VÀO:
+---------
+MT5/MQL5/Indicators/FVG_Indicator_Enhanced.mq5
+
+========================================================================
+              ⚠️ CÁCH PHÂN BIỆT
+========================================================================
+
+MỞ FILE BẰNG NOTEPAD VÀ KIỂM TRA:
+
+EXPERT ADVISOR (EA):
+====================
+Line 9:  #include <Trade\Trade.mqh>         ✅ CÓ
+Line 14: CTrade         trade;               ✅ CÓ
+Line 313: void OnTick()                      ✅ CÓ
+Search: #property indicator_chart_window     ❌ KHÔNG CÓ
+
+INDICATOR:
+==========
+Line 5:  #property indicator_chart_window   ✅ CÓ
+Line 264: int OnCalculate(                   ✅ CÓ
+Search: #include <Trade\Trade.mqh>           ❌ KHÔNG CÓ
+Search: CTrade                               ❌ KHÔNG CÓ
+
+========================================================================
+              📂 CÁCH DOWNLOAD TỪ CURSOR/EDITOR
+========================================================================
+
+1. MỞ FILE TRONG EDITOR
+   - Click vào FVG_Trading_EA.mq5
+
+2. SELECT ALL
+   - Ctrl + A (chọn toàn bộ)
+
+3. COPY
+   - Ctrl + C
+
+4. MỞ NOTEPAD/METATRADER EDITOR
+   - Tạo file mới: FVG_Trading_EA.mq5
+
+5. PASTE
+   - Ctrl + V
+
+6. SAVE
+   - Save vào: MT5/MQL5/Experts/FVG_Trading_EA.mq5
+
+========================================================================
+              🔍 VERIFICATION (KIỂM TRA)
+========================================================================
+
+SAU KHI COPY, MỞ FILE VÀ CHECK:
+
+✅ Dòng đầu tiên: //+------------------------------------------------------------------+
+✅ Dòng 2: //|                                              FVG_Trading_EA.mq5  |
+✅ Dòng 9: #include <Trade\Trade.mqh>
+✅ Dòng 14: CTrade         trade;
+✅ File size: 40-50KB (không phải 51KB)
+
+NẾU FILE CÓ:
+❌ #property indicator_chart_window
+❌ OnCalculate()
+
+→ BẠN ĐÃ COPY NHẦM FILE INDICATOR!
+
+========================================================================
+              📋 CHECKLIST
+========================================================================
+
+TRƯỚC KHI COMPILE:
+
+- [ ] File name: FVG_Trading_EA.mq5 (không phải FVG_Indicator_Enhanced.mq5)
+- [ ] Folder: MT5/MQL5/Experts/ (không phải Indicators/)
+- [ ] File có: #include <Trade\Trade.mqh>
+- [ ] File có: CTrade trade;
+- [ ] File có: void OnTick()
+- [ ] File KHÔNG có: #property indicator_chart_window
+- [ ] File KHÔNG có: OnCalculate()
+
+========================================================================
+              🔧 COMPILE & RUN
+========================================================================
+
+1. MỞ METAEDITOR (F4 trong MT5)
+
+2. NAVIGATOR → Experts → FVG_Trading_EA.mq5
+
+3. COMPILE (F7)
+   - Phải thấy: "0 error(s), 0 warning(s)"
+   - Nếu có error về CTrade → File sai!
+
+4. ATTACH VÀO CHART
+   - Từ Navigator → Experts (không phải Indicators!)
+   - Kéo FVG_Trading_EA vào chart
+
+5. SETTINGS
+   - Common: ✅ Allow Algo Trading
+   - Inputs: ✅ Auto_Trade = true
+
+========================================================================
+              ❓ FAQ
+========================================================================
+
+Q: Làm sao biết đã copy đúng file EA?
+A: Mở file và check dòng 9: #include <Trade\Trade.mqh>
+   Nếu không có → Đó là Indicator!
+
+Q: File nào để download?
+A: FVG_Trading_EA.mq5 (TỰ ĐỘNG VÀO LỆNH)
+   Không phải FVG_Indicator_Enhanced.mq5
+
+Q: Làm sao compile thành công?
+A: File phải có CTrade. Nếu error "CTrade undefined" → File sai!
+
+Q: File ở đâu trong workspace?
+A: /workspace/FVG_Trading_EA.mq5
+
+========================================================================
+              📊 FILE STRUCTURE
+========================================================================
+
+Trong /workspace có:
+
+✅ FVG_Trading_EA.mq5             ← EXPERT ADVISOR (Dùng cái này!)
+❌ FVG_Indicator_Enhanced.mq5     ← INDICATOR (Không tự động)
+
+Và các file hướng dẫn:
+- README_EA.md
+- HUONG_DAN_SU_DUNG_EA.md
+- PHAN_BIET_EA_VA_INDICATOR.txt
+- HUONG_DAN_SESSION_FILTER.md
+- UPDATE_SESSION_FILTER.txt
+- DOWNLOAD_FILES.txt (file này)
+
+========================================================================
+              ✅ FINAL CHECK
+========================================================================
+
+TRƯỚC KHI SỬ DỤNG, CONFIRM:
+
+1. ✅ File name = FVG_Trading_EA.mq5
+2. ✅ Folder = MT5/MQL5/Experts/
+3. ✅ Compile thành công (0 errors)
+4. ✅ Trong Navigator thấy: Experts → FVG_Trading_EA
+5. ✅ Attach từ Experts (không phải Indicators)
+6. ✅ Properties có: Auto_Trade parameter
+7. ✅ Allow Algo Trading = ON
+
+NẾU TẤT CẢ ✅ → BẠN ĐANG DÙNG ĐÚNG EA!
+
+========================================================================
+
+Version: 2.01
+Date: 2025-11-28
+File: DOWNLOAD_FILES.txt
+
+NẾU VẪN NHẦM LẪN, ĐỌC FILE: PHAN_BIET_EA_VA_INDICATOR.txt
+
+========================================================================
