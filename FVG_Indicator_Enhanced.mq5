@@ -532,8 +532,6 @@ void CreateButtons()
 //+------------------------------------------------------------------+
 void CreateTradingZone(bool is_buy)
 {
-   TradingZone &zone = is_buy ? buy_zone : sell_zone;
-   
    // Get current price and visible bars
    double current_price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    int visible_bars = (int)ChartGetInteger(0, CHART_VISIBLE_BARS);
@@ -544,23 +542,30 @@ void CreateTradingZone(bool is_buy)
    
    if(is_buy)
    {
-      zone.top = current_price - 50 * _Point;
-      zone.bottom = current_price - 150 * _Point;
+      buy_zone.top = current_price - 50 * _Point;
+      buy_zone.bottom = current_price - 150 * _Point;
+      buy_zone.original_top = buy_zone.top;
+      buy_zone.original_bottom = buy_zone.bottom;
+      buy_zone.is_active = true;
+      buy_zone.is_locked = false;
+      buy_zone.signal_triggered = false;
+      buy_zone.order_placed = false;
+      
+      DrawTradingZone(buy_zone);
    }
    else
    {
-      zone.top = current_price + 150 * _Point;
-      zone.bottom = current_price + 50 * _Point;
+      sell_zone.top = current_price + 150 * _Point;
+      sell_zone.bottom = current_price + 50 * _Point;
+      sell_zone.original_top = sell_zone.top;
+      sell_zone.original_bottom = sell_zone.bottom;
+      sell_zone.is_active = true;
+      sell_zone.is_locked = false;
+      sell_zone.signal_triggered = false;
+      sell_zone.order_placed = false;
+      
+      DrawTradingZone(sell_zone);
    }
-   
-   zone.original_top = zone.top;
-   zone.original_bottom = zone.bottom;
-   zone.is_active = true;
-   zone.is_locked = false;
-   zone.signal_triggered = false;
-   zone.order_placed = false;
-   
-   DrawTradingZone(zone);
 }
 
 //+------------------------------------------------------------------+
@@ -673,8 +678,6 @@ void UnlockTradingZones()
 bool CheckSweepAndPattern(const datetime &time[], const double &open[], const double &high[], 
                           const double &low[], const double &close[], bool is_buy_signal)
 {
-   TradingZone &zone = is_buy_signal ? buy_zone : sell_zone;
-   
    // Check last 10 bars for sweep in the zone
    for(int i = 1; i < 10; i++)
    {
@@ -684,13 +687,13 @@ bool CheckSweepAndPattern(const datetime &time[], const double &open[], const do
       if(is_buy_signal)
       {
          // For buy: low must touch the zone
-         if(low[i] <= zone.top && low[i] >= zone.bottom)
+         if(low[i] <= buy_zone.top && low[i] >= buy_zone.bottom)
             price_in_zone = true;
       }
       else
       {
          // For sell: high must touch the zone
-         if(high[i] >= zone.bottom && high[i] <= zone.top)
+         if(high[i] >= sell_zone.bottom && high[i] <= sell_zone.top)
             price_in_zone = true;
       }
       
@@ -706,9 +709,9 @@ bool CheckSweepAndPattern(const datetime &time[], const double &open[], const do
             if(IsBottomFormation(open, high, low, close, i))
             {
                // Save sweep candle information
-               zone.sweep_bar_index = i;
-               zone.sweep_low = low[i];
-               zone.sweep_high = high[i];
+               buy_zone.sweep_bar_index = i;
+               buy_zone.sweep_low = low[i];
+               buy_zone.sweep_high = high[i];
                
                Print("BUY Signal: Sweep at bar ", i, " (Low=", low[i], ") + Bottom formation detected!");
                return true;
@@ -719,9 +722,9 @@ bool CheckSweepAndPattern(const datetime &time[], const double &open[], const do
             if(IsTopFormation(open, high, low, close, i))
             {
                // Save sweep candle information
-               zone.sweep_bar_index = i;
-               zone.sweep_low = low[i];
-               zone.sweep_high = high[i];
+               sell_zone.sweep_bar_index = i;
+               sell_zone.sweep_low = low[i];
+               sell_zone.sweep_high = high[i];
                
                Print("SELL Signal: Sweep at bar ", i, " (High=", high[i], ") + Top formation detected!");
                return true;
