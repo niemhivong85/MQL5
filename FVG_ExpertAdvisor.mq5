@@ -1,17 +1,24 @@
 //+------------------------------------------------------------------+
-//|                                                       FVG_EA.mq5 |
-//|                              FVG Trading Expert Advisor          |
+//|                                           FVG_ExpertAdvisor.mq5 |
+//|                              EXPERT ADVISOR - NOT INDICATOR!     |
+//|                              Fair Value Gap Auto Trading Robot   |
 //+------------------------------------------------------------------+
 #property copyright "Copyright 2025"
 #property version   "2.00"
+#property description "FVG Expert Advisor - Automatic Trading Robot"
 #property strict
+
+// ============================================================================
+//  IMPORTANT: THIS IS AN EXPERT ADVISOR (EA), NOT AN INDICATOR!
+//  It will place real trades automatically when signals are detected.
+// ============================================================================
 
 #include <Trade\Trade.mqh>
 
-CTrade trade;
+CTrade trade;  // Trade execution object
 
-//--- Input parameters
-input group    "=== FVG Settings ==="
+//--- Input Parameters
+input group    "=== FVG Detection ==="
 input int      FVG_LookBack = 500;
 input color    Bullish_FVG_Color = clrGreen;
 input color    Bearish_FVG_Color = clrRed;
@@ -22,29 +29,26 @@ input int      Min_FVG_Points = 10;
 input bool     Fill_On_Touch = true;
 input bool     Delete_On_Break = true;
 
-input group    "=== Trading Zone Settings ==="
+input group    "=== Trading Zones ==="
 input int      Sweep_Candles_Count = 5;
-input bool     Enable_Alert = true;
-input bool     Enable_Sound = true;
-input string   Alert_Sound = "alert.wav";
 input bool     Zone_Mitigate_On_Touch = true;
 input bool     Zone_Delete_On_Break = true;
 
-input group    "=== Stop Loss Settings ==="
+input group    "=== Stop Loss ==="
 input bool     SL_Use_Sweep_Low = true;
 input bool     SL_Use_Zone_Edge = false;
 input int      SL_Buffer_Points = 5;
 
 input group    "=== Risk Management ==="
-input double   Risk_Percent = 2.0;              // % tài khoản rủi ro
-input double   Fixed_Risk_Amount = 0;           // Hoặc số tiền cố định (0=dùng %)
+input double   Risk_Percent = 2.0;
+input double   Fixed_Risk_Amount = 0;
 input bool     Auto_Calculate_Lot = true;
 input double   Manual_Lot_Size = 0.01;
-input int      Magic_Number = 789456;
+input int      Magic_Number = 123789;
 input int      Max_Slippage = 10;
 input int      Max_Open_Trades = 1;
 
-input group    "=== Take Profit Settings ==="
+input group    "=== Take Profit ==="
 input bool     Use_EMA_Exit = true;
 input int      EMA_Period = 20;
 input ENUM_TIMEFRAMES EMA_Timeframe = PERIOD_CURRENT;
@@ -57,11 +61,13 @@ input double   RR_Level_3 = 3.0;
 input double   RR_Close_Percent_3 = 20.0;
 
 input group    "=== Trading Control ==="
-input bool     Auto_Trade_Enabled = true;       // BẬT/TẮT tự động giao dịch
+input bool     Auto_Trade_Enabled = true;
 input bool     Close_Opposite_Trades = true;
-input bool     Enable_News_Filter = false;
+input bool     Enable_Alert = true;
+input bool     Enable_Sound = true;
+input string   Alert_Sound = "alert.wav";
 
-input group    "=== Display Colors ==="
+input group    "=== Display ==="
 input color    Buy_Zone_Color = clrDodgerBlue;
 input color    Sell_Zone_Color = clrOrangeRed;
 input color    Button_Buy_Color = clrLimeGreen;
@@ -72,7 +78,7 @@ input int      Zone_Transparency = 70;
 input int      Zone_Border_Width = 3;
 
 //--- Structures
-struct FVG_Structure
+struct FVG_Data
 {
    datetime time_start;
    datetime time_end;
@@ -85,7 +91,7 @@ struct FVG_Structure
    bool     is_active;
 };
 
-struct TradingZone
+struct Zone_Data
 {
    double   top;
    double   bottom;
@@ -111,40 +117,43 @@ struct TradingZone
    bool     tp2_hit;
 };
 
-//--- Global variables
-FVG_Structure FVG_Array[];
+//--- Global Variables
+FVG_Data FVG_Array[];
 int FVG_Count = 0;
 
-TradingZone buy_zone;
-TradingZone sell_zone;
+Zone_Data buy_zone;
+Zone_Data sell_zone;
 
 int ema_handle = INVALID_HANDLE;
 double ema_buffer[];
 
 datetime last_bar_time = 0;
 
-// Button names
 string btn_buy = "BTN_BUY";
 string btn_sell = "BTN_SELL";
 string btn_confirm = "BTN_CONFIRM";
 string btn_edit = "BTN_EDIT";
 
 //+------------------------------------------------------------------+
-//| Expert initialization function                                   |
+//| Expert Advisor Initialization                                    |
 //+------------------------------------------------------------------+
 int OnInit()
 {
-   Print("=================================================");
-   Print("      FVG EXPERT ADVISOR STARTING");
-   Print("=================================================");
+   Print("========================================================");
+   Print("    FVG EXPERT ADVISOR (NOT INDICATOR!) - STARTING");
+   Print("========================================================");
    
-   // Setup trade object
+   // Configure trade object
    trade.SetExpertMagicNumber(Magic_Number);
    trade.SetDeviationInPoints(Max_Slippage);
    trade.SetTypeFilling(ORDER_FILLING_FOK);
    trade.SetAsyncMode(false);
    
-   // Clear all objects
+   Print("Trade object configured:");
+   Print("  Magic Number: ", Magic_Number);
+   Print("  Max Slippage: ", Max_Slippage, " points");
+   
+   // Clear objects
    DeleteAllObjects();
    
    // Initialize arrays
@@ -152,24 +161,14 @@ int OnInit()
    FVG_Count = 0;
    
    // Initialize buy zone
-   buy_zone.is_active = false;
-   buy_zone.is_locked = false;
+   ZeroMemory(buy_zone);
    buy_zone.is_buy_zone = true;
    buy_zone.rect_name = "ZONE_BUY";
-   buy_zone.signal_triggered = false;
-   buy_zone.ticket = 0;
-   buy_zone.tp1_hit = false;
-   buy_zone.tp2_hit = false;
    
    // Initialize sell zone
-   sell_zone.is_active = false;
-   sell_zone.is_locked = false;
+   ZeroMemory(sell_zone);
    sell_zone.is_buy_zone = false;
    sell_zone.rect_name = "ZONE_SELL";
-   sell_zone.signal_triggered = false;
-   sell_zone.ticket = 0;
-   sell_zone.tp1_hit = false;
-   sell_zone.tp2_hit = false;
    
    // Initialize EMA
    if(Use_EMA_Exit)
@@ -177,27 +176,29 @@ int OnInit()
       ema_handle = iMA(_Symbol, EMA_Timeframe, EMA_Period, 0, MODE_EMA, PRICE_CLOSE);
       if(ema_handle == INVALID_HANDLE)
       {
-         Print("❌ ERROR: Failed to create EMA indicator");
+         Print("ERROR: Failed to create EMA indicator!");
          return(INIT_FAILED);
       }
       ArraySetAsSeries(ema_buffer, true);
+      Print("EMA indicator created successfully (Period: ", EMA_Period, ")");
    }
    
-   // Create control buttons
+   // Create buttons
    CreateButtons();
    ChartRedraw();
    
-   Print("✅ EA Initialized Successfully!");
-   Print("Auto Trading: ", Auto_Trade_Enabled ? "ENABLED ✅" : "DISABLED ❌");
-   Print("Risk per trade: ", Risk_Percent, "%");
-   Print("Magic Number: ", Magic_Number);
-   Print("=================================================");
+   Print("========================================================");
+   Print("EA INITIALIZED SUCCESSFULLY!");
+   Print("Auto Trading: ", Auto_Trade_Enabled ? "ENABLED" : "DISABLED");
+   Print("Risk: ", Risk_Percent, "% per trade");
+   Print("THIS IS AN EXPERT ADVISOR - IT WILL PLACE REAL TRADES!");
+   Print("========================================================");
    
    return(INIT_SUCCEEDED);
 }
 
 //+------------------------------------------------------------------+
-//| Expert deinitialization function                                 |
+//| Expert Advisor Deinitialization                                  |
 //+------------------------------------------------------------------+
 void OnDeinit(const int reason)
 {
@@ -206,27 +207,28 @@ void OnDeinit(const int reason)
    
    DeleteAllObjects();
    
-   Print("=================================================");
-   Print("      FVG EA STOPPED");
-   Print("=================================================");
+   Print("========================================================");
+   Print("FVG EXPERT ADVISOR STOPPED");
+   Print("Reason: ", reason);
+   Print("========================================================");
 }
 
 //+------------------------------------------------------------------+
-//| Expert tick function (MAIN TRADING LOGIC)                        |
+//| Expert Advisor Tick Function - MAIN TRADING LOGIC               |
 //+------------------------------------------------------------------+
 void OnTick()
 {
    // Check for new bar
-   datetime current_bar_time = iTime(_Symbol, PERIOD_CURRENT, 0);
-   bool new_bar = (current_bar_time != last_bar_time);
+   datetime current_bar = iTime(_Symbol, PERIOD_CURRENT, 0);
+   bool new_bar = (current_bar != last_bar_time);
    
    if(new_bar)
    {
-      last_bar_time = current_bar_time;
+      last_bar_time = current_bar;
       
-      // Detect and update FVGs
+      // Detect FVG patterns
       DetectFVGs();
-      UpdateFVGStatus();
+      UpdateFVGs();
       
       // Update zones
       if(buy_zone.is_active && buy_zone.is_locked)
@@ -236,18 +238,16 @@ void OnTick()
          UpdateZoneMitigation(sell_zone);
    }
    
-   // Check for trading signals (every tick)
+   // Check for trade signals
    if(Auto_Trade_Enabled)
-   {
-      CheckForSignals();
-   }
+      CheckForTradingSignals();
    
-   // Manage open positions (every tick)
+   // Manage open positions
    ManageOpenPositions();
 }
 
 //+------------------------------------------------------------------+
-//| Detect FVG patterns                                              |
+//| Detect FVG Patterns                                              |
 //+------------------------------------------------------------------+
 void DetectFVGs()
 {
@@ -260,15 +260,15 @@ void DetectFVGs()
    ArraySetAsSeries(low, true);
    ArraySetAsSeries(close, true);
    
-   int copied = CopyTime(_Symbol, PERIOD_CURRENT, 0, 100, time);
-   if(copied <= 0) return;
+   int bars = CopyTime(_Symbol, PERIOD_CURRENT, 0, 100, time);
+   if(bars <= 0) return;
    
    CopyOpen(_Symbol, PERIOD_CURRENT, 0, 100, open);
    CopyHigh(_Symbol, PERIOD_CURRENT, 0, 100, high);
    CopyLow(_Symbol, PERIOD_CURRENT, 0, 100, low);
    CopyClose(_Symbol, PERIOD_CURRENT, 0, 100, close);
    
-   for(int i = 3; i < 50 && i < copied - 2; i++)
+   for(int i = 3; i < 50 && i < bars - 2; i++)
    {
       // Bullish FVG
       if(Show_Bullish_FVG)
@@ -276,25 +276,21 @@ void DetectFVGs()
          double gap_bottom = high[i+2];
          double gap_top = low[i];
          
-         if(gap_top > gap_bottom)
+         if(gap_top > gap_bottom && (gap_top - gap_bottom) >= Min_FVG_Points * _Point)
          {
-            double gap_size = gap_top - gap_bottom;
-            if(gap_size >= Min_FVG_Points * _Point)
+            bool exists = false;
+            for(int j = 0; j < FVG_Count; j++)
             {
-               bool exists = false;
-               for(int j = 0; j < FVG_Count; j++)
+               if(FVG_Array[j].time_start == time[i+2] && 
+                  MathAbs(FVG_Array[j].original_top - gap_top) < _Point * 2 &&
+                  FVG_Array[j].is_bullish)
                {
-                  if(FVG_Array[j].time_start == time[i+2] && 
-                     MathAbs(FVG_Array[j].original_top - gap_top) < _Point * 2 &&
-                     FVG_Array[j].is_bullish)
-                  {
-                     exists = true;
-                     break;
-                  }
+                  exists = true;
+                  break;
                }
-               if(!exists)
-                  CreateFVG(time[i+2], gap_top, gap_bottom, true);
             }
+            if(!exists)
+               CreateFVG(time[i+2], gap_top, gap_bottom, true);
          }
       }
       
@@ -304,36 +300,31 @@ void DetectFVGs()
          double gap_top = low[i+2];
          double gap_bottom = high[i];
          
-         if(gap_top > gap_bottom)
+         if(gap_top > gap_bottom && (gap_top - gap_bottom) >= Min_FVG_Points * _Point)
          {
-            double gap_size = gap_top - gap_bottom;
-            if(gap_size >= Min_FVG_Points * _Point)
+            bool exists = false;
+            for(int j = 0; j < FVG_Count; j++)
             {
-               bool exists = false;
-               for(int j = 0; j < FVG_Count; j++)
+               if(FVG_Array[j].time_start == time[i+2] && 
+                  MathAbs(FVG_Array[j].original_top - gap_top) < _Point * 2 &&
+                  !FVG_Array[j].is_bullish)
                {
-                  if(FVG_Array[j].time_start == time[i+2] && 
-                     MathAbs(FVG_Array[j].original_top - gap_top) < _Point * 2 &&
-                     !FVG_Array[j].is_bullish)
-                  {
-                     exists = true;
-                     break;
-                  }
+                  exists = true;
+                  break;
                }
-               if(!exists)
-                  CreateFVG(time[i+2], gap_top, gap_bottom, false);
             }
+            if(!exists)
+               CreateFVG(time[i+2], gap_top, gap_bottom, false);
          }
       }
    }
 }
 
 //+------------------------------------------------------------------+
-//| Check for trading signals and place orders                       |
+//| Check For Trading Signals                                        |
 //+------------------------------------------------------------------+
-void CheckForSignals()
+void CheckForTradingSignals()
 {
-   // Check if max trades reached
    int open_trades = CountOpenTrades();
    if(open_trades >= Max_Open_Trades)
       return;
@@ -341,150 +332,145 @@ void CheckForSignals()
    // Check BUY signal
    if(buy_zone.is_active && buy_zone.is_locked && !buy_zone.signal_triggered && buy_zone.ticket == 0)
    {
-      if(CheckSweepAndPattern(true))
+      if(CheckSweepPattern(true))
       {
          buy_zone.signal_triggered = true;
          
-         // Calculate entry and stops
          CalculateStopLoss(buy_zone);
          buy_zone.entry_price = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
          
          double sl_points = MathAbs(buy_zone.entry_price - buy_zone.stop_loss_price) / _Point;
          buy_zone.lot_size = CalculateLotSize(sl_points);
          
-         // Calculate TPs
-         double risk_distance = buy_zone.entry_price - buy_zone.stop_loss_price;
-         buy_zone.tp1_price = buy_zone.entry_price + (risk_distance * RR_Level_1);
-         buy_zone.tp2_price = buy_zone.entry_price + (risk_distance * RR_Level_2);
-         buy_zone.tp3_price = buy_zone.entry_price + (risk_distance * RR_Level_3);
+         double risk_dist = buy_zone.entry_price - buy_zone.stop_loss_price;
+         buy_zone.tp1_price = buy_zone.entry_price + (risk_dist * RR_Level_1);
+         buy_zone.tp2_price = buy_zone.entry_price + (risk_dist * RR_Level_2);
+         buy_zone.tp3_price = buy_zone.entry_price + (risk_dist * RR_Level_3);
          buy_zone.original_lot = buy_zone.lot_size;
          
          DrawTradeLevels(buy_zone);
          
-         // Send alert
-         string msg = StringFormat("🔵 BUY SIGNAL!\nEntry: %.5f | SL: %.5f (%.0f pts)\nLot: %.2f | TP1: %.5f | TP2: %.5f | TP3: %.5f",
+         string msg = StringFormat("BUY SIGNAL!\nEntry: %.5f | SL: %.5f (%.0f pts)\nLot: %.2f\nTP1: %.5f | TP2: %.5f | TP3: %.5f",
                                    buy_zone.entry_price, buy_zone.stop_loss_price, sl_points,
                                    buy_zone.lot_size, buy_zone.tp1_price, buy_zone.tp2_price, buy_zone.tp3_price);
          SendAlert(msg);
          
-         // Place order
          if(Close_Opposite_Trades)
             CloseOppositeTrades(true);
          
-         OpenBuyOrder(buy_zone);
+         PlaceBuyOrder(buy_zone);
       }
    }
    
    // Check SELL signal
    if(sell_zone.is_active && sell_zone.is_locked && !sell_zone.signal_triggered && sell_zone.ticket == 0)
    {
-      if(CheckSweepAndPattern(false))
+      if(CheckSweepPattern(false))
       {
          sell_zone.signal_triggered = true;
          
-         // Calculate entry and stops
          CalculateStopLoss(sell_zone);
          sell_zone.entry_price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
          
          double sl_points = MathAbs(sell_zone.stop_loss_price - sell_zone.entry_price) / _Point;
          sell_zone.lot_size = CalculateLotSize(sl_points);
          
-         // Calculate TPs
-         double risk_distance = sell_zone.stop_loss_price - sell_zone.entry_price;
-         sell_zone.tp1_price = sell_zone.entry_price - (risk_distance * RR_Level_1);
-         sell_zone.tp2_price = sell_zone.entry_price - (risk_distance * RR_Level_2);
-         sell_zone.tp3_price = sell_zone.entry_price - (risk_distance * RR_Level_3);
+         double risk_dist = sell_zone.stop_loss_price - sell_zone.entry_price;
+         sell_zone.tp1_price = sell_zone.entry_price - (risk_dist * RR_Level_1);
+         sell_zone.tp2_price = sell_zone.entry_price - (risk_dist * RR_Level_2);
+         sell_zone.tp3_price = sell_zone.entry_price - (risk_dist * RR_Level_3);
          sell_zone.original_lot = sell_zone.lot_size;
          
          DrawTradeLevels(sell_zone);
          
-         // Send alert
-         string msg = StringFormat("🔴 SELL SIGNAL!\nEntry: %.5f | SL: %.5f (%.0f pts)\nLot: %.2f | TP1: %.5f | TP2: %.5f | TP3: %.5f",
+         string msg = StringFormat("SELL SIGNAL!\nEntry: %.5f | SL: %.5f (%.0f pts)\nLot: %.2f\nTP1: %.5f | TP2: %.5f | TP3: %.5f",
                                    sell_zone.entry_price, sell_zone.stop_loss_price, sl_points,
                                    sell_zone.lot_size, sell_zone.tp1_price, sell_zone.tp2_price, sell_zone.tp3_price);
          SendAlert(msg);
          
-         // Place order
          if(Close_Opposite_Trades)
             CloseOppositeTrades(false);
          
-         OpenSellOrder(sell_zone);
+         PlaceSellOrder(sell_zone);
       }
    }
 }
 
 //+------------------------------------------------------------------+
-//| Open BUY order                                                   |
+//| Place BUY Order                                                  |
 //+------------------------------------------------------------------+
-void OpenBuyOrder(TradingZone &zone)
+void PlaceBuyOrder(Zone_Data &zone)
 {
    double ask = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
    double sl = zone.stop_loss_price;
    double tp = zone.tp3_price;
    
-   if(trade.Buy(zone.lot_size, _Symbol, ask, sl, tp, "FVG Buy"))
+   if(trade.Buy(zone.lot_size, _Symbol, ask, sl, tp, "FVG EA Buy"))
    {
       zone.ticket = trade.ResultOrder();
       zone.tp1_hit = false;
       zone.tp2_hit = false;
       
-      Print("✅ BUY ORDER OPENED!");
-      Print("   Ticket: #", zone.ticket);
-      Print("   Lot: ", zone.lot_size);
-      Print("   Entry: ", ask);
-      Print("   SL: ", sl);
-      Print("   TP: ", tp);
+      Print("========================================");
+      Print("BUY ORDER PLACED SUCCESSFULLY!");
+      Print("Ticket: ", zone.ticket);
+      Print("Lot Size: ", zone.lot_size);
+      Print("Entry: ", ask);
+      Print("Stop Loss: ", sl);
+      Print("Take Profit: ", tp);
+      Print("========================================");
    }
    else
    {
-      Print("❌ BUY ORDER FAILED!");
-      Print("   Error: ", trade.ResultRetcodeDescription());
+      Print("ERROR: Failed to place BUY order!");
+      Print("Error: ", trade.ResultRetcodeDescription());
       zone.signal_triggered = false;
    }
 }
 
 //+------------------------------------------------------------------+
-//| Open SELL order                                                  |
+//| Place SELL Order                                                 |
 //+------------------------------------------------------------------+
-void OpenSellOrder(TradingZone &zone)
+void PlaceSellOrder(Zone_Data &zone)
 {
    double bid = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    double sl = zone.stop_loss_price;
    double tp = zone.tp3_price;
    
-   if(trade.Sell(zone.lot_size, _Symbol, bid, sl, tp, "FVG Sell"))
+   if(trade.Sell(zone.lot_size, _Symbol, bid, sl, tp, "FVG EA Sell"))
    {
       zone.ticket = trade.ResultOrder();
       zone.tp1_hit = false;
       zone.tp2_hit = false;
       
-      Print("✅ SELL ORDER OPENED!");
-      Print("   Ticket: #", zone.ticket);
-      Print("   Lot: ", zone.lot_size);
-      Print("   Entry: ", bid);
-      Print("   SL: ", sl);
-      Print("   TP: ", tp);
+      Print("========================================");
+      Print("SELL ORDER PLACED SUCCESSFULLY!");
+      Print("Ticket: ", zone.ticket);
+      Print("Lot Size: ", zone.lot_size);
+      Print("Entry: ", bid);
+      Print("Stop Loss: ", sl);
+      Print("Take Profit: ", tp);
+      Print("========================================");
    }
    else
    {
-      Print("❌ SELL ORDER FAILED!");
-      Print("   Error: ", trade.ResultRetcodeDescription());
+      Print("ERROR: Failed to place SELL order!");
+      Print("Error: ", trade.ResultRetcodeDescription());
       zone.signal_triggered = false;
    }
 }
 
 //+------------------------------------------------------------------+
-//| Manage open positions                                            |
+//| Manage Open Positions                                            |
 //+------------------------------------------------------------------+
 void ManageOpenPositions()
 {
-   // Manage buy position
+   // Manage BUY position
    if(buy_zone.ticket > 0 && PositionSelectByTicket(buy_zone.ticket))
    {
       double current_price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
       double position_volume = PositionGetDouble(POSITION_VOLUME);
       
-      // Check TP levels
       if(Use_RR_Exit)
       {
          // TP1
@@ -496,8 +482,8 @@ void ManageOpenPositions()
                if(trade.PositionClosePartial(buy_zone.ticket, close_vol))
                {
                   buy_zone.tp1_hit = true;
-                  Print("✅ TP1 HIT - Closed ", RR_Close_Percent_1, "%");
-                  SendAlert(StringFormat("TP1 Hit @ %.5f - Closed %.0f%%", current_price, RR_Close_Percent_1));
+                  Print("TP1 HIT - Closed ", RR_Close_Percent_1, "% at ", current_price);
+                  SendAlert(StringFormat("TP1 Hit @ %.5f", current_price));
                }
             }
          }
@@ -511,37 +497,35 @@ void ManageOpenPositions()
                if(trade.PositionClosePartial(buy_zone.ticket, close_vol))
                {
                   buy_zone.tp2_hit = true;
-                  Print("✅ TP2 HIT - Closed ", RR_Close_Percent_2, "%");
-                  SendAlert(StringFormat("TP2 Hit @ %.5f - Closed %.0f%%", current_price, RR_Close_Percent_2));
+                  Print("TP2 HIT - Closed ", RR_Close_Percent_2, "% at ", current_price);
+                  SendAlert(StringFormat("TP2 Hit @ %.5f", current_price));
                }
             }
          }
       }
       
-      // Check EMA exit
+      // EMA exit
       if(Use_EMA_Exit && CheckEMAExit(true))
       {
          if(trade.PositionClose(buy_zone.ticket))
          {
-            Print("✅ BUY position closed by EMA");
-            SendAlert("BUY closed by EMA exit");
+            Print("BUY position closed by EMA exit");
+            SendAlert("BUY closed by EMA");
             buy_zone.ticket = 0;
          }
       }
    }
    else if(buy_zone.ticket > 0)
    {
-      // Position closed
       buy_zone.ticket = 0;
    }
    
-   // Manage sell position
+   // Manage SELL position
    if(sell_zone.ticket > 0 && PositionSelectByTicket(sell_zone.ticket))
    {
       double current_price = SymbolInfoDouble(_Symbol, SYMBOL_ASK);
       double position_volume = PositionGetDouble(POSITION_VOLUME);
       
-      // Check TP levels
       if(Use_RR_Exit)
       {
          // TP1
@@ -553,8 +537,8 @@ void ManageOpenPositions()
                if(trade.PositionClosePartial(sell_zone.ticket, close_vol))
                {
                   sell_zone.tp1_hit = true;
-                  Print("✅ TP1 HIT - Closed ", RR_Close_Percent_1, "%");
-                  SendAlert(StringFormat("TP1 Hit @ %.5f - Closed %.0f%%", current_price, RR_Close_Percent_1));
+                  Print("TP1 HIT - Closed ", RR_Close_Percent_1, "% at ", current_price);
+                  SendAlert(StringFormat("TP1 Hit @ %.5f", current_price));
                }
             }
          }
@@ -568,69 +552,32 @@ void ManageOpenPositions()
                if(trade.PositionClosePartial(sell_zone.ticket, close_vol))
                {
                   sell_zone.tp2_hit = true;
-                  Print("✅ TP2 HIT - Closed ", RR_Close_Percent_2, "%");
-                  SendAlert(StringFormat("TP2 Hit @ %.5f - Closed %.0f%%", current_price, RR_Close_Percent_2));
+                  Print("TP2 HIT - Closed ", RR_Close_Percent_2, "% at ", current_price);
+                  SendAlert(StringFormat("TP2 Hit @ %.5f", current_price));
                }
             }
          }
       }
       
-      // Check EMA exit
+      // EMA exit
       if(Use_EMA_Exit && CheckEMAExit(false))
       {
          if(trade.PositionClose(sell_zone.ticket))
          {
-            Print("✅ SELL position closed by EMA");
-            SendAlert("SELL closed by EMA exit");
+            Print("SELL position closed by EMA exit");
+            SendAlert("SELL closed by EMA");
             sell_zone.ticket = 0;
          }
       }
    }
    else if(sell_zone.ticket > 0)
    {
-      // Position closed
       sell_zone.ticket = 0;
    }
 }
 
 //+------------------------------------------------------------------+
-//| Count open trades                                                |
-//+------------------------------------------------------------------+
-int CountOpenTrades()
-{
-   int count = 0;
-   for(int i = PositionsTotal() - 1; i >= 0; i--)
-   {
-      if(PositionGetSymbol(i) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic_Number)
-         count++;
-   }
-   return count;
-}
-
-//+------------------------------------------------------------------+
-//| Close opposite trades                                            |
-//+------------------------------------------------------------------+
-void CloseOppositeTrades(bool is_buy_signal)
-{
-   for(int i = PositionsTotal() - 1; i >= 0; i--)
-   {
-      if(PositionGetSymbol(i) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic_Number)
-      {
-         ENUM_POSITION_TYPE pos_type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
-         
-         if((is_buy_signal && pos_type == POSITION_TYPE_SELL) || 
-            (!is_buy_signal && pos_type == POSITION_TYPE_BUY))
-         {
-            ulong ticket = PositionGetInteger(POSITION_TICKET);
-            trade.PositionClose(ticket);
-            Print("Closed opposite position: ", ticket);
-         }
-      }
-   }
-}
-
-//+------------------------------------------------------------------+
-//| Chart event handler                                              |
+//| Chart Event Handler                                              |
 //+------------------------------------------------------------------+
 void OnChartEvent(const int id, const long &lparam, const double &dparam, const string &sparam)
 {
@@ -648,12 +595,12 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
       }
       else if(sparam == btn_confirm)
       {
-         LockTradingZones();
+         LockZones();
          ObjectSetInteger(0, btn_confirm, OBJPROP_STATE, false);
       }
       else if(sparam == btn_edit)
       {
-         UnlockTradingZones();
+         UnlockZones();
          ObjectSetInteger(0, btn_edit, OBJPROP_STATE, false);
       }
    }
@@ -676,6 +623,35 @@ void OnChartEvent(const int id, const long &lparam, const double &dparam, const 
 //+------------------------------------------------------------------+
 //| Helper Functions                                                 |
 //+------------------------------------------------------------------+
+
+int CountOpenTrades()
+{
+   int count = 0;
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      if(PositionGetSymbol(i) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic_Number)
+         count++;
+   }
+   return count;
+}
+
+void CloseOppositeTrades(bool is_buy)
+{
+   for(int i = PositionsTotal() - 1; i >= 0; i--)
+   {
+      if(PositionGetSymbol(i) == _Symbol && PositionGetInteger(POSITION_MAGIC) == Magic_Number)
+      {
+         ENUM_POSITION_TYPE type = (ENUM_POSITION_TYPE)PositionGetInteger(POSITION_TYPE);
+         
+         if((is_buy && type == POSITION_TYPE_SELL) || (!is_buy && type == POSITION_TYPE_BUY))
+         {
+            ulong ticket = PositionGetInteger(POSITION_TICKET);
+            trade.PositionClose(ticket);
+            Print("Closed opposite position: ", ticket);
+         }
+      }
+   }
+}
 
 void CreateButtons()
 {
@@ -736,8 +712,8 @@ void CreateTradingZone(bool is_buy)
       buy_zone.is_locked = false;
       buy_zone.signal_triggered = false;
       buy_zone.ticket = 0;
-      DrawTradingZone(buy_zone);
-      Print("✅ Buy zone created");
+      DrawZone(buy_zone);
+      Print("Buy zone created");
    }
    else
    {
@@ -749,12 +725,12 @@ void CreateTradingZone(bool is_buy)
       sell_zone.is_locked = false;
       sell_zone.signal_triggered = false;
       sell_zone.ticket = 0;
-      DrawTradingZone(sell_zone);
-      Print("✅ Sell zone created");
+      DrawZone(sell_zone);
+      Print("Sell zone created");
    }
 }
 
-void DrawTradingZone(TradingZone &zone)
+void DrawZone(Zone_Data &zone)
 {
    if(ObjectFind(0, zone.rect_name) >= 0)
       ObjectDelete(0, zone.rect_name);
@@ -784,26 +760,26 @@ void DrawTradingZone(TradingZone &zone)
    ChartRedraw();
 }
 
-void LockTradingZones()
+void LockZones()
 {
    if(buy_zone.is_active)
    {
       buy_zone.is_locked = true;
       ObjectSetInteger(0, buy_zone.rect_name, OBJPROP_SELECTABLE, false);
-      Print("Buy zone LOCKED ✅");
+      Print("Buy zone LOCKED");
    }
    
    if(sell_zone.is_active)
    {
       sell_zone.is_locked = true;
       ObjectSetInteger(0, sell_zone.rect_name, OBJPROP_SELECTABLE, false);
-      Print("Sell zone LOCKED ✅");
+      Print("Sell zone LOCKED");
    }
    
-   Alert("Trading zones locked - Ready for auto trading!");
+   Alert("Zones locked - Auto trading ready!");
 }
 
-void UnlockTradingZones()
+void UnlockZones()
 {
    if(buy_zone.is_active)
    {
@@ -832,10 +808,10 @@ void UnlockTradingZones()
    }
    
    ChartRedraw();
-   Print("Zones UNLOCKED for editing");
+   Print("Zones UNLOCKED");
 }
 
-bool CheckSweepAndPattern(bool is_buy)
+bool CheckSweepPattern(bool is_buy)
 {
    datetime time[];
    double open[], high[], low[], close[];
@@ -869,11 +845,11 @@ bool CheckSweepAndPattern(bool is_buy)
       
       if(!in_zone) continue;
       
-      if(IsSweepCandle(i, is_buy))
+      if(IsSweep(i, is_buy, open, high, low, close))
       {
          if(is_buy)
          {
-            if(IsBottomFormation(i))
+            if(IsBottom(i, open, high, low, close))
             {
                buy_zone.sweep_bar_index = i;
                buy_zone.sweep_low = low[i];
@@ -883,7 +859,7 @@ bool CheckSweepAndPattern(bool is_buy)
          }
          else
          {
-            if(IsTopFormation(i))
+            if(IsTop(i, open, high, low, close))
             {
                sell_zone.sweep_bar_index = i;
                sell_zone.sweep_low = low[i];
@@ -897,55 +873,26 @@ bool CheckSweepAndPattern(bool is_buy)
    return false;
 }
 
-bool IsSweepCandle(int idx, bool for_buy)
+bool IsSweep(int idx, bool for_buy, const double &open[], const double &high[], const double &low[], const double &close[])
 {
-   double open[], high[], low[], close[];
-   ArraySetAsSeries(open, true);
-   ArraySetAsSeries(high, true);
-   ArraySetAsSeries(low, true);
-   ArraySetAsSeries(close, true);
-   
-   CopyOpen(_Symbol, PERIOD_CURRENT, 0, idx + 2, open);
-   CopyHigh(_Symbol, PERIOD_CURRENT, 0, idx + 2, high);
-   CopyLow(_Symbol, PERIOD_CURRENT, 0, idx + 2, low);
-   CopyClose(_Symbol, PERIOD_CURRENT, 0, idx + 2, close);
-   
    if(idx + 1 >= ArraySize(open)) return false;
    
    if(for_buy)
    {
       if(low[idx] >= low[idx + 1]) return false;
       bool bearish = close[idx] < open[idx];
-      if(bearish)
-         return (close[idx] >= close[idx + 1]);
-      else
-         return (close[idx] >= open[idx + 1]);
+      return bearish ? (close[idx] >= close[idx + 1]) : (close[idx] >= open[idx + 1]);
    }
    else
    {
       if(high[idx] <= high[idx + 1]) return false;
       bool bullish = close[idx] > open[idx];
-      if(bullish)
-         return (close[idx] <= close[idx + 1]);
-      else
-         return (close[idx] <= open[idx + 1]);
+      return bullish ? (close[idx] <= close[idx + 1]) : (close[idx] <= open[idx + 1]);
    }
 }
 
-bool IsBottomFormation(int sweep_idx)
+bool IsBottom(int sweep_idx, const double &open[], const double &high[], const double &low[], const double &close[])
 {
-   double open[], high[], low[], close[];
-   ArraySetAsSeries(open, true);
-   ArraySetAsSeries(high, true);
-   ArraySetAsSeries(low, true);
-   ArraySetAsSeries(close, true);
-   
-   int needed = sweep_idx + Sweep_Candles_Count + 1;
-   CopyOpen(_Symbol, PERIOD_CURRENT, 0, needed, open);
-   CopyHigh(_Symbol, PERIOD_CURRENT, 0, needed, high);
-   CopyLow(_Symbol, PERIOD_CURRENT, 0, needed, low);
-   CopyClose(_Symbol, PERIOD_CURRENT, 0, needed, close);
-   
    int end = MathMax(0, sweep_idx - (Sweep_Candles_Count - 1));
    
    for(int i = sweep_idx; i >= end; i--)
@@ -957,20 +904,8 @@ bool IsBottomFormation(int sweep_idx)
    return false;
 }
 
-bool IsTopFormation(int sweep_idx)
+bool IsTop(int sweep_idx, const double &open[], const double &high[], const double &low[], const double &close[])
 {
-   double open[], high[], low[], close[];
-   ArraySetAsSeries(open, true);
-   ArraySetAsSeries(high, true);
-   ArraySetAsSeries(low, true);
-   ArraySetAsSeries(close, true);
-   
-   int needed = sweep_idx + Sweep_Candles_Count + 1;
-   CopyOpen(_Symbol, PERIOD_CURRENT, 0, needed, open);
-   CopyHigh(_Symbol, PERIOD_CURRENT, 0, needed, high);
-   CopyLow(_Symbol, PERIOD_CURRENT, 0, needed, low);
-   CopyClose(_Symbol, PERIOD_CURRENT, 0, needed, close);
-   
    int end = MathMax(0, sweep_idx - (Sweep_Candles_Count - 1));
    
    for(int i = sweep_idx; i >= end; i--)
@@ -982,15 +917,8 @@ bool IsTopFormation(int sweep_idx)
    return false;
 }
 
-void CalculateStopLoss(TradingZone &zone)
+void CalculateStopLoss(Zone_Data &zone)
 {
-   double high[], low[];
-   ArraySetAsSeries(high, true);
-   ArraySetAsSeries(low, true);
-   
-   CopyHigh(_Symbol, PERIOD_CURRENT, 0, 20, high);
-   CopyLow(_Symbol, PERIOD_CURRENT, 0, 20, low);
-   
    if(zone.is_buy_zone)
    {
       if(SL_Use_Sweep_Low && zone.sweep_bar_index > 0)
@@ -1035,7 +963,7 @@ double CalculateLotSize(double sl_points)
    return lot;
 }
 
-void DrawTradeLevels(TradingZone &zone)
+void DrawTradeLevels(Zone_Data &zone)
 {
    string prefix = zone.is_buy_zone ? "BUY_" : "SELL_";
    datetime t1 = iTime(_Symbol, PERIOD_CURRENT, 10);
@@ -1089,10 +1017,7 @@ bool CheckEMAExit(bool is_buy)
    double close_price = iClose(_Symbol, PERIOD_CURRENT, 0);
    double ema = ema_buffer[0];
    
-   if(is_buy)
-      return (close_price < ema);
-   else
-      return (close_price > ema);
+   return is_buy ? (close_price < ema) : (close_price > ema);
 }
 
 void SendAlert(string msg)
@@ -1122,10 +1047,10 @@ void CreateFVG(datetime start_time, double top, double bottom, bool is_bullish)
    FVG_Array[idx].is_active = true;
    FVG_Array[idx].rect_name = "FVG_" + TimeToString(start_time, TIME_DATE|TIME_SECONDS) + (is_bullish ? "_B" : "_S");
    
-   DrawFVGRectangle(idx);
+   DrawFVG(idx);
 }
 
-void DrawFVGRectangle(int idx)
+void DrawFVG(int idx)
 {
    string name = FVG_Array[idx].rect_name;
    if(ObjectFind(0, name) >= 0) ObjectDelete(0, name);
@@ -1152,7 +1077,7 @@ void DrawFVGRectangle(int idx)
    ObjectSetInteger(0, name, OBJPROP_BGCOLOR, bg);
 }
 
-void UpdateFVGStatus()
+void UpdateFVGs()
 {
    datetime time[];
    double high[], low[], close[];
@@ -1162,8 +1087,8 @@ void UpdateFVGStatus()
    ArraySetAsSeries(low, true);
    ArraySetAsSeries(close, true);
    
-   int copied = CopyTime(_Symbol, PERIOD_CURRENT, 0, 100, time);
-   if(copied <= 0) return;
+   int bars = CopyTime(_Symbol, PERIOD_CURRENT, 0, 100, time);
+   if(bars <= 0) return;
    
    CopyHigh(_Symbol, PERIOD_CURRENT, 0, 100, high);
    CopyLow(_Symbol, PERIOD_CURRENT, 0, 100, low);
@@ -1173,7 +1098,7 @@ void UpdateFVGStatus()
    {
       if(!FVG_Array[i].is_active) continue;
       
-      for(int bar = 0; bar < copied; bar++)
+      for(int bar = 0; bar < bars; bar++)
       {
          if(time[bar] <= FVG_Array[i].time_start) continue;
          
@@ -1225,7 +1150,7 @@ void UpdateFVGStatus()
          }
          
          if(modified)
-            DrawFVGRectangle(i);
+            DrawFVG(i);
       }
       
       if(FVG_Array[i].is_active)
@@ -1236,7 +1161,7 @@ void UpdateFVGStatus()
    }
 }
 
-void UpdateZoneMitigation(TradingZone &zone)
+void UpdateZoneMitigation(Zone_Data &zone)
 {
    if(!zone.is_active || !zone.is_locked) return;
    
@@ -1299,7 +1224,7 @@ void UpdateZoneMitigation(TradingZone &zone)
       }
       
       if(modified)
-         DrawTradingZone(zone);
+         DrawZone(zone);
    }
 }
 
