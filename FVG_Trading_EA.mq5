@@ -86,6 +86,15 @@ input int      Magic_Number = 123456;
 input bool     Auto_Trade = true;
 input string   Trade_Comment = "FVG_EA";
 
+input group    "=== Trading Session Filter ==="
+input bool     Enable_Session_Filter = true;        // Bật lọc theo phiên
+input int      Broker_GMT_Offset = 2;                // GMT offset của broker (VD: GMT+2)
+input bool     Trade_Asian_Session = false;         // Phiên Á (Tokyo): 00:00-09:00 GMT
+input bool     Trade_London_Session = true;         // Phiên London: 08:00-17:00 GMT  
+input bool     Trade_NY_Session = true;             // Phiên New York: 13:00-22:00 GMT
+input bool     Trade_Sydney_Session = false;        // Phiên Sydney: 22:00-07:00 GMT
+input bool     Allow_Weekend_Trading = false;       // Cho phép trade cuối tuần
+
 input group    "=== Button & Zone Colors ==="
 input color    Buy_Zone_Color = clrDodgerBlue;       // Màu vùng MUA (có thể đổi)
 input color    Sell_Zone_Color = clrOrangeRed;       // Màu vùng BÁN (có thể đổi)
@@ -206,6 +215,8 @@ void ExecuteTrade(TradingZone &zone);
 bool CheckEMAExit(bool is_buy_position);
 void ManagePositions();
 bool ClosePartialPosition(ulong ticket, double close_lot, string reason);
+bool IsInTradingSession();
+string GetCurrentSession();
 
 //+------------------------------------------------------------------+
 int OnInit()
@@ -283,6 +294,14 @@ void OnDeinit(const int reason)
 //+------------------------------------------------------------------+
 void OnTick()
 {
+   // Check trading session first
+   if(Enable_Session_Filter && !IsInTradingSession())
+   {
+      // Outside trading hours - only manage existing positions
+      ManagePositions();
+      return;
+   }
+   
    // Update FVG status
    UpdateFVGStatus();
    
