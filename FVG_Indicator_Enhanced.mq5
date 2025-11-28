@@ -639,12 +639,14 @@ bool IsSweepCandle(const double &open[], const double &high[], const double &low
 bool IsBottomFormation(const double &open[], const double &high[], const double &low[], 
                        const double &close[], int sweep_index)
 {
-   // Tìm cây tạo đáy trong N cây tiếp theo
+   // Tìm cây tạo đáy trong N cây nến TỪ CÂY SWEEP (bao gồm cả sweep)
    // Tạo đáy: Close[i] > High[i+1]
    
-   int search_end = MathMax(0, sweep_index - Sweep_Candles_Count);
+   // Tính từ cây sweep, đếm N cây (bao gồm sweep)
+   // sweep_index là cây sweep, cần check đến sweep_index - (N-1)
+   int search_end = MathMax(0, sweep_index - (Sweep_Candles_Count - 1));
    
-   for(int i = sweep_index - 1; i >= search_end; i--)
+   for(int i = sweep_index; i >= search_end; i--)
    {
       if(i + 1 >= ArraySize(close))
          continue;
@@ -652,11 +654,14 @@ bool IsBottomFormation(const double &open[], const double &high[], const double 
       // Điều kiện tạo đáy: Close của cây hiện tại > High của cây liền kề
       if(close[i] > high[i + 1])
       {
-         Print("Bottom formation found at bar ", i, " (Close=", close[i], " > High[i+1]=", high[i+1], ")");
+         int candle_from_sweep = sweep_index - i + 1; // Cây thứ mấy tính từ sweep
+         Print("Bottom formation found at bar ", i, " (candle #", candle_from_sweep, " from sweep)");
+         Print("  Close[", i, "]=", close[i], " > High[", i+1, "]=", high[i+1]);
          return true;
       }
    }
    
+   Print("No bottom formation found in ", Sweep_Candles_Count, " candles from sweep at bar ", sweep_index);
    return false;
 }
 
@@ -664,12 +669,14 @@ bool IsBottomFormation(const double &open[], const double &high[], const double 
 bool IsTopFormation(const double &open[], const double &high[], const double &low[], 
                     const double &close[], int sweep_index)
 {
-   // Tìm cây tạo đỉnh trong N cây tiếp theo
+   // Tìm cây tạo đỉnh trong N cây nến TỪ CÂY SWEEP (bao gồm cả sweep)
    // Tạo đỉnh: Close[i] < Low[i+1]
    
-   int search_end = MathMax(0, sweep_index - Sweep_Candles_Count);
+   // Tính từ cây sweep, đếm N cây (bao gồm sweep)
+   // sweep_index là cây sweep, cần check đến sweep_index - (N-1)
+   int search_end = MathMax(0, sweep_index - (Sweep_Candles_Count - 1));
    
-   for(int i = sweep_index - 1; i >= search_end; i--)
+   for(int i = sweep_index; i >= search_end; i--)
    {
       if(i + 1 >= ArraySize(close))
          continue;
@@ -677,11 +684,14 @@ bool IsTopFormation(const double &open[], const double &high[], const double &lo
       // Điều kiện tạo đỉnh: Close của cây hiện tại < Low của cây liền kề
       if(close[i] < low[i + 1])
       {
-         Print("Top formation found at bar ", i, " (Close=", close[i], " < Low[i+1]=", low[i+1], ")");
+         int candle_from_sweep = sweep_index - i + 1; // Cây thứ mấy tính từ sweep
+         Print("Top formation found at bar ", i, " (candle #", candle_from_sweep, " from sweep)");
+         Print("  Close[", i, "]=", close[i], " < Low[", i+1, "]=", low[i+1]);
          return true;
       }
    }
    
+   Print("No top formation found in ", Sweep_Candles_Count, " candles from sweep at bar ", sweep_index);
    return false;
 }
 
