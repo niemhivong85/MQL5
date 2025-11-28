@@ -143,6 +143,9 @@ struct TradingZone
    bool     is_locked;
    bool     is_buy_zone;
    string   rect_name;
+   string   btn_lock_name;
+   string   btn_edit_name;
+   string   btn_delete_name;
    bool     signal_triggered;
    datetime last_check_time;
    int      sweep_bar_index;
@@ -180,11 +183,9 @@ datetime last_chart_event = 0;
 int ema_handle = INVALID_HANDLE;
 double ema_buffer[];
 
-// Button names
+// Button names (chỉ dùng cho buttons MUA/BÁN chính)
 string btn_buy = button_prefix + "BUY";
 string btn_sell = button_prefix + "SELL";
-string btn_confirm = button_prefix + "CONFIRM";
-string btn_edit = button_prefix + "EDIT";
 
 // Last bar time for new bar detection
 datetime last_bar_time = 0;
@@ -198,10 +199,12 @@ void CreateFVG(datetime start_time, double top, double bottom, bool is_bullish, 
 void DrawFVGRectangle(int index);
 void UpdateFVGStatus(const datetime &time[], const double &high[], const double &low[], const double &close[]);
 void CreateButtons();
+void UpdateZoneButtons(TradingZone &zone);
 void CreateTradingZone(bool is_buy);
 void DrawTradingZone(TradingZone &zone);
-void LockTradingZones();
-void UnlockTradingZones();
+void LockZone(TradingZone &zone);
+void UnlockZone(TradingZone &zone);
+void DeleteZone(TradingZone &zone);
 bool CheckSweepAndPattern(const datetime &time[], const double &open[], const double &high[], const double &low[], const double &close[], bool is_buy_signal);
 bool IsSweepCandle(const double &open[], const double &high[], const double &low[], const double &close[], int index, bool check_for_buy);
 bool IsBottomFormation(const double &open[], const double &high[], const double &low[], const double &close[], int sweep_index);
@@ -242,6 +245,9 @@ int OnInit()
    buy_zone.is_locked = false;
    buy_zone.is_buy_zone = true;
    buy_zone.rect_name = zone_prefix + "BUY";
+   buy_zone.btn_lock_name = button_prefix + "BUY_LOCK";
+   buy_zone.btn_edit_name = button_prefix + "BUY_EDIT";
+   buy_zone.btn_delete_name = button_prefix + "BUY_DELETE";
    buy_zone.signal_triggered = false;
    buy_zone.order_placed = false;
    buy_zone.top = 0;
@@ -262,6 +268,9 @@ int OnInit()
    sell_zone.is_locked = false;
    sell_zone.is_buy_zone = false;
    sell_zone.rect_name = zone_prefix + "SELL";
+   sell_zone.btn_lock_name = button_prefix + "SELL_LOCK";
+   sell_zone.btn_edit_name = button_prefix + "SELL_EDIT";
+   sell_zone.btn_delete_name = button_prefix + "SELL_DELETE";
    sell_zone.signal_triggered = false;
    sell_zone.order_placed = false;
    sell_zone.top = 0;
@@ -471,6 +480,7 @@ void OnChartEvent(const int id,
 {
    if(id == CHARTEVENT_OBJECT_CLICK)
    {
+      // Main buttons
       if(sparam == btn_buy)
       {
          creating_buy_zone = true;
@@ -485,15 +495,37 @@ void OnChartEvent(const int id,
          CreateTradingZone(false);
          ObjectSetInteger(0, btn_sell, OBJPROP_STATE, false);
       }
-      else if(sparam == btn_confirm)
+      // BUY zone buttons
+      else if(sparam == buy_zone.btn_lock_name)
       {
-         LockTradingZones();
-         ObjectSetInteger(0, btn_confirm, OBJPROP_STATE, false);
+         LockZone(buy_zone);
+         ObjectSetInteger(0, buy_zone.btn_lock_name, OBJPROP_STATE, false);
       }
-      else if(sparam == btn_edit)
+      else if(sparam == buy_zone.btn_edit_name)
       {
-         UnlockTradingZones();
-         ObjectSetInteger(0, btn_edit, OBJPROP_STATE, false);
+         UnlockZone(buy_zone);
+         ObjectSetInteger(0, buy_zone.btn_edit_name, OBJPROP_STATE, false);
+      }
+      else if(sparam == buy_zone.btn_delete_name)
+      {
+         DeleteZone(buy_zone);
+         ObjectSetInteger(0, buy_zone.btn_delete_name, OBJPROP_STATE, false);
+      }
+      // SELL zone buttons
+      else if(sparam == sell_zone.btn_lock_name)
+      {
+         LockZone(sell_zone);
+         ObjectSetInteger(0, sell_zone.btn_lock_name, OBJPROP_STATE, false);
+      }
+      else if(sparam == sell_zone.btn_edit_name)
+      {
+         UnlockZone(sell_zone);
+         ObjectSetInteger(0, sell_zone.btn_edit_name, OBJPROP_STATE, false);
+      }
+      else if(sparam == sell_zone.btn_delete_name)
+      {
+         DeleteZone(sell_zone);
+         ObjectSetInteger(0, sell_zone.btn_delete_name, OBJPROP_STATE, false);
       }
    }
    
@@ -540,8 +572,8 @@ void CreateButtons()
 {
    int x_start = 20;
    int y_start = 30;
-   int btn_width = 80;
-   int btn_height = 30;
+   int btn_width = 120;
+   int btn_height = 35;
    int btn_spacing = 10;
    
    // Buy button
@@ -551,7 +583,7 @@ void CreateButtons()
       ObjectSetInteger(0, btn_buy, OBJPROP_YDISTANCE, y_start);
       ObjectSetInteger(0, btn_buy, OBJPROP_XSIZE, btn_width);
       ObjectSetInteger(0, btn_buy, OBJPROP_YSIZE, btn_height);
-      ObjectSetString(0, btn_buy, OBJPROP_TEXT, "MUA");
+      ObjectSetString(0, btn_buy, OBJPROP_TEXT, "➕ TẠO ZONE MUA");
       ObjectSetInteger(0, btn_buy, OBJPROP_COLOR, clrWhite);
       ObjectSetInteger(0, btn_buy, OBJPROP_BGCOLOR, Button_Buy_Color);
       ObjectSetInteger(0, btn_buy, OBJPROP_BORDER_COLOR, clrBlack);
@@ -567,7 +599,7 @@ void CreateButtons()
       ObjectSetInteger(0, btn_sell, OBJPROP_YDISTANCE, y_start);
       ObjectSetInteger(0, btn_sell, OBJPROP_XSIZE, btn_width);
       ObjectSetInteger(0, btn_sell, OBJPROP_YSIZE, btn_height);
-      ObjectSetString(0, btn_sell, OBJPROP_TEXT, "BÁN");
+      ObjectSetString(0, btn_sell, OBJPROP_TEXT, "➕ TẠO ZONE BÁN");
       ObjectSetInteger(0, btn_sell, OBJPROP_COLOR, clrWhite);
       ObjectSetInteger(0, btn_sell, OBJPROP_BGCOLOR, Button_Sell_Color);
       ObjectSetInteger(0, btn_sell, OBJPROP_BORDER_COLOR, clrBlack);
@@ -575,37 +607,77 @@ void CreateButtons()
       ObjectSetInteger(0, btn_sell, OBJPROP_FONTSIZE, 10);
       ObjectSetString(0, btn_sell, OBJPROP_FONT, "Arial Bold");
    }
+}
+
+//+------------------------------------------------------------------+
+void UpdateZoneButtons(TradingZone &zone)
+{
+   int y_base = zone.is_buy_zone ? 80 : 130;
+   int x_start = 20;
+   int btn_width = 80;
+   int btn_height = 30;
+   int btn_spacing = 5;
    
-   // Confirm button
-   if(ObjectCreate(0, btn_confirm, OBJ_BUTTON, 0, 0, 0))
+   // LOCK button (chỉ hiện khi chưa lock)
+   if(ObjectFind(0, zone.btn_lock_name) >= 0)
+      ObjectDelete(0, zone.btn_lock_name);
+   
+   if(zone.is_active && !zone.is_locked)
    {
-      ObjectSetInteger(0, btn_confirm, OBJPROP_XDISTANCE, x_start + (btn_width + btn_spacing) * 2);
-      ObjectSetInteger(0, btn_confirm, OBJPROP_YDISTANCE, y_start);
-      ObjectSetInteger(0, btn_confirm, OBJPROP_XSIZE, btn_width);
-      ObjectSetInteger(0, btn_confirm, OBJPROP_YSIZE, btn_height);
-      ObjectSetString(0, btn_confirm, OBJPROP_TEXT, "XÁC NHẬN");
-      ObjectSetInteger(0, btn_confirm, OBJPROP_COLOR, clrBlack);
-      ObjectSetInteger(0, btn_confirm, OBJPROP_BGCOLOR, Button_Confirm_Color);
-      ObjectSetInteger(0, btn_confirm, OBJPROP_BORDER_COLOR, clrBlack);
-      ObjectSetInteger(0, btn_confirm, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      ObjectSetInteger(0, btn_confirm, OBJPROP_FONTSIZE, 9);
-      ObjectSetString(0, btn_confirm, OBJPROP_FONT, "Arial Bold");
+      if(ObjectCreate(0, zone.btn_lock_name, OBJ_BUTTON, 0, 0, 0))
+      {
+         ObjectSetInteger(0, zone.btn_lock_name, OBJPROP_XDISTANCE, x_start);
+         ObjectSetInteger(0, zone.btn_lock_name, OBJPROP_YDISTANCE, y_base);
+         ObjectSetInteger(0, zone.btn_lock_name, OBJPROP_XSIZE, btn_width);
+         ObjectSetInteger(0, zone.btn_lock_name, OBJPROP_YSIZE, btn_height);
+         ObjectSetString(0, zone.btn_lock_name, OBJPROP_TEXT, "🔒 XÁC NHẬN");
+         ObjectSetInteger(0, zone.btn_lock_name, OBJPROP_COLOR, clrBlack);
+         ObjectSetInteger(0, zone.btn_lock_name, OBJPROP_BGCOLOR, clrGold);
+         ObjectSetInteger(0, zone.btn_lock_name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+         ObjectSetInteger(0, zone.btn_lock_name, OBJPROP_FONTSIZE, 8);
+      }
    }
    
-   // Edit button
-   if(ObjectCreate(0, btn_edit, OBJ_BUTTON, 0, 0, 0))
+   // EDIT button (chỉ hiện khi đã lock)
+   if(ObjectFind(0, zone.btn_edit_name) >= 0)
+      ObjectDelete(0, zone.btn_edit_name);
+   
+   if(zone.is_active && zone.is_locked)
    {
-      ObjectSetInteger(0, btn_edit, OBJPROP_XDISTANCE, x_start + (btn_width + btn_spacing) * 3);
-      ObjectSetInteger(0, btn_edit, OBJPROP_YDISTANCE, y_start);
-      ObjectSetInteger(0, btn_edit, OBJPROP_XSIZE, btn_width);
-      ObjectSetInteger(0, btn_edit, OBJPROP_YSIZE, btn_height);
-      ObjectSetString(0, btn_edit, OBJPROP_TEXT, "SỬA");
-      ObjectSetInteger(0, btn_edit, OBJPROP_COLOR, clrWhite);
-      ObjectSetInteger(0, btn_edit, OBJPROP_BGCOLOR, Button_Edit_Color);
-      ObjectSetInteger(0, btn_edit, OBJPROP_BORDER_COLOR, clrBlack);
-      ObjectSetInteger(0, btn_edit, OBJPROP_CORNER, CORNER_LEFT_UPPER);
-      ObjectSetInteger(0, btn_edit, OBJPROP_FONTSIZE, 10);
-      ObjectSetString(0, btn_edit, OBJPROP_FONT, "Arial Bold");
+      if(ObjectCreate(0, zone.btn_edit_name, OBJ_BUTTON, 0, 0, 0))
+      {
+         ObjectSetInteger(0, zone.btn_edit_name, OBJPROP_XDISTANCE, x_start + btn_width + btn_spacing);
+         ObjectSetInteger(0, zone.btn_edit_name, OBJPROP_YDISTANCE, y_base);
+         ObjectSetInteger(0, zone.btn_edit_name, OBJPROP_XSIZE, btn_width);
+         ObjectSetInteger(0, zone.btn_edit_name, OBJPROP_YSIZE, btn_height);
+         ObjectSetString(0, zone.btn_edit_name, OBJPROP_TEXT, "✏️ SỬA");
+         ObjectSetInteger(0, zone.btn_edit_name, OBJPROP_COLOR, clrWhite);
+         ObjectSetInteger(0, zone.btn_edit_name, OBJPROP_BGCOLOR, Button_Edit_Color);
+         ObjectSetInteger(0, zone.btn_edit_name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+         ObjectSetInteger(0, zone.btn_edit_name, OBJPROP_FONTSIZE, 9);
+      }
+   }
+   
+   // DELETE button (luôn hiện khi zone active)
+   if(ObjectFind(0, zone.btn_delete_name) >= 0)
+      ObjectDelete(0, zone.btn_delete_name);
+   
+   if(zone.is_active)
+   {
+      int x_pos = zone.is_locked ? (x_start + (btn_width + btn_spacing) * 2) : (x_start + btn_width + btn_spacing);
+      
+      if(ObjectCreate(0, zone.btn_delete_name, OBJ_BUTTON, 0, 0, 0))
+      {
+         ObjectSetInteger(0, zone.btn_delete_name, OBJPROP_XDISTANCE, x_pos);
+         ObjectSetInteger(0, zone.btn_delete_name, OBJPROP_YDISTANCE, y_base);
+         ObjectSetInteger(0, zone.btn_delete_name, OBJPROP_XSIZE, btn_width);
+         ObjectSetInteger(0, zone.btn_delete_name, OBJPROP_YSIZE, btn_height);
+         ObjectSetString(0, zone.btn_delete_name, OBJPROP_TEXT, "🗑️ XÓA");
+         ObjectSetInteger(0, zone.btn_delete_name, OBJPROP_COLOR, clrWhite);
+         ObjectSetInteger(0, zone.btn_delete_name, OBJPROP_BGCOLOR, clrMaroon);
+         ObjectSetInteger(0, zone.btn_delete_name, OBJPROP_CORNER, CORNER_LEFT_UPPER);
+         ObjectSetInteger(0, zone.btn_delete_name, OBJPROP_FONTSIZE, 9);
+      }
    }
 }
 
@@ -630,6 +702,7 @@ void CreateTradingZone(bool is_buy)
       buy_zone.order_placed = false;
       
       DrawTradingZone(buy_zone);
+      UpdateZoneButtons(buy_zone);
       Print("✅ BUY zone created:");
       Print("   Top: ", buy_zone.top);
       Print("   Bottom: ", buy_zone.bottom);
@@ -649,6 +722,7 @@ void CreateTradingZone(bool is_buy)
       sell_zone.order_placed = false;
       
       DrawTradingZone(sell_zone);
+      UpdateZoneButtons(sell_zone);
       Print("✅ SELL zone created:");
       Print("   Top: ", sell_zone.top);
       Print("   Bottom: ", sell_zone.bottom);
@@ -733,95 +807,91 @@ void DrawTradingZone(TradingZone &zone)
 }
 
 //+------------------------------------------------------------------+
-void LockTradingZones()
+void LockZone(TradingZone &zone)
 {
-   bool any_locked = false;
+   if(!zone.is_active)
+      return;
    
-   if(buy_zone.is_active)
-   {
-      buy_zone.is_locked = true;
-      ObjectSetInteger(0, buy_zone.rect_name, OBJPROP_SELECTABLE, false);
-      DrawTradingZone(buy_zone);
-      
-      double zone_size = (buy_zone.top - buy_zone.bottom) / _Point;
-      Print("🔒 BUY Zone LOCKED:");
-      Print("   Top: ", buy_zone.top);
-      Print("   Bottom: ", buy_zone.bottom);
-      Print("   Size: ", zone_size, " points");
-      Print("   ✅ Zone cố định! Sẵn sàng chờ tín hiệu...");
-      any_locked = true;
-   }
+   zone.is_locked = true;
+   ObjectSetInteger(0, zone.rect_name, OBJPROP_SELECTABLE, false);
+   DrawTradingZone(zone);
+   UpdateZoneButtons(zone);
    
-   if(sell_zone.is_active)
-   {
-      sell_zone.is_locked = true;
-      ObjectSetInteger(0, sell_zone.rect_name, OBJPROP_SELECTABLE, false);
-      DrawTradingZone(sell_zone);
-      
-      double zone_size = (sell_zone.top - sell_zone.bottom) / _Point;
-      Print("🔒 SELL Zone LOCKED:");
-      Print("   Top: ", sell_zone.top);
-      Print("   Bottom: ", sell_zone.bottom);
-      Print("   Size: ", zone_size, " points");
-      Print("   ✅ Zone cố định! Sẵn sàng chờ tín hiệu...");
-      any_locked = true;
-   }
+   double zone_size = (zone.top - zone.bottom) / _Point;
+   string zone_type = zone.is_buy_zone ? "BUY" : "SELL";
    
-   if(any_locked)
-      Alert("✅ Trading zones confirmed and locked!\nEA sẽ tự động vào lệnh khi có tín hiệu.");
+   Print("🔒 ", zone_type, " Zone LOCKED:");
+   Print("   Top: ", zone.top);
+   Print("   Bottom: ", zone.bottom);
+   Print("   Size: ", zone_size, " points");
+   Print("   ✅ Zone cố định! Sẵn sàng chờ tín hiệu...");
+   
+   Alert("🔒 ", zone_type, " zone đã được xác nhận và khóa!\nEA sẽ tự động vào lệnh khi có tín hiệu.");
 }
 
 //+------------------------------------------------------------------+
-void UnlockTradingZones()
+void UnlockZone(TradingZone &zone)
 {
-   bool any_unlocked = false;
+   if(!zone.is_active)
+      return;
    
-   if(buy_zone.is_active)
-   {
-      buy_zone.is_locked = false;
-      buy_zone.signal_triggered = false;
-      buy_zone.order_placed = false;
-      ObjectSetInteger(0, buy_zone.rect_name, OBJPROP_SELECTABLE, true);
-      DrawTradingZone(buy_zone);
-      
-      // Delete trade level lines
-      ObjectDelete(0, "BUY_SL_LINE");
-      ObjectDelete(0, "BUY_TP1_LINE");
-      ObjectDelete(0, "BUY_TP2_LINE");
-      ObjectDelete(0, "BUY_TP3_LINE");
-      ObjectDelete(0, "BUY_ENTRY_LINE");
-      
-      Print("🔓 BUY Zone UNLOCKED:");
-      Print("   ✏️ Có thể di chuyển và thay đổi kích thước");
-      Print("   👉 Kéo giữa box để di chuyển");
-      Print("   👉 Kéo góc/cạnh để resize");
-      any_unlocked = true;
-   }
+   zone.is_locked = false;
+   zone.signal_triggered = false;
+   zone.order_placed = false;
+   ObjectSetInteger(0, zone.rect_name, OBJPROP_SELECTABLE, true);
+   DrawTradingZone(zone);
+   UpdateZoneButtons(zone);
    
-   if(sell_zone.is_active)
-   {
-      sell_zone.is_locked = false;
-      sell_zone.signal_triggered = false;
-      sell_zone.order_placed = false;
-      ObjectSetInteger(0, sell_zone.rect_name, OBJPROP_SELECTABLE, true);
-      DrawTradingZone(sell_zone);
-      
-      // Delete trade level lines
-      ObjectDelete(0, "SELL_SL_LINE");
-      ObjectDelete(0, "SELL_TP1_LINE");
-      ObjectDelete(0, "SELL_TP2_LINE");
-      ObjectDelete(0, "SELL_TP3_LINE");
-      ObjectDelete(0, "SELL_ENTRY_LINE");
-      
-      Print("🔓 SELL Zone UNLOCKED:");
-      Print("   ✏️ Có thể di chuyển và thay đổi kích thước");
-      Print("   👉 Kéo giữa box để di chuyển");
-      Print("   👉 Kéo góc/cạnh để resize");
-      any_unlocked = true;
-   }
+   // Delete trade level lines
+   string prefix = zone.is_buy_zone ? "BUY" : "SELL";
+   ObjectDelete(0, prefix + "_SL_LINE");
+   ObjectDelete(0, prefix + "_TP1_LINE");
+   ObjectDelete(0, prefix + "_TP2_LINE");
+   ObjectDelete(0, prefix + "_TP3_LINE");
+   ObjectDelete(0, prefix + "_ENTRY_LINE");
    
-   if(any_unlocked)
-      Alert("✏️ Zones unlocked! Bạn có thể chỉnh sửa lại.");
+   string zone_type = zone.is_buy_zone ? "BUY" : "SELL";
+   Print("🔓 ", zone_type, " Zone UNLOCKED:");
+   Print("   ✏️ Có thể di chuyển và thay đổi kích thước");
+   Print("   👉 Kéo giữa box để di chuyển");
+   Print("   👉 Kéo góc/cạnh để resize");
+   
+   Alert("🔓 ", zone_type, " zone đã mở khóa! Bạn có thể chỉnh sửa lại.");
+   
+   ChartRedraw();
+}
+
+//+------------------------------------------------------------------+
+void DeleteZone(TradingZone &zone)
+{
+   if(!zone.is_active)
+      return;
+   
+   // Delete rectangle
+   ObjectDelete(0, zone.rect_name);
+   ObjectDelete(0, zone.rect_name + "_LABEL");
+   
+   // Delete buttons
+   ObjectDelete(0, zone.btn_lock_name);
+   ObjectDelete(0, zone.btn_edit_name);
+   ObjectDelete(0, zone.btn_delete_name);
+   
+   // Delete trade levels
+   string prefix = zone.is_buy_zone ? "BUY" : "SELL";
+   ObjectDelete(0, prefix + "_SL_LINE");
+   ObjectDelete(0, prefix + "_TP1_LINE");
+   ObjectDelete(0, prefix + "_TP2_LINE");
+   ObjectDelete(0, prefix + "_TP3_LINE");
+   ObjectDelete(0, prefix + "_ENTRY_LINE");
+   
+   zone.is_active = false;
+   zone.is_locked = false;
+   zone.signal_triggered = false;
+   zone.order_placed = false;
+   
+   string zone_type = zone.is_buy_zone ? "BUY" : "SELL";
+   Print("🗑️ ", zone_type, " zone DELETED");
+   Alert("🗑️ ", zone_type, " zone đã được xóa!");
    
    ChartRedraw();
 }
