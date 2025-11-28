@@ -146,6 +146,8 @@ struct TradingZone
    string   btn_lock_name;
    string   btn_edit_name;
    string   btn_delete_name;
+   string   sweep_marker_names[];  // Danh sách các sweep markers của zone này
+   int      sweep_count;
    bool     signal_triggered;
    datetime last_check_time;
    int      sweep_bar_index;
@@ -250,6 +252,8 @@ int OnInit()
    buy_zone.btn_lock_name = button_prefix + "BUY_LOCK";
    buy_zone.btn_edit_name = button_prefix + "BUY_EDIT";
    buy_zone.btn_delete_name = button_prefix + "BUY_DELETE";
+   ArrayResize(buy_zone.sweep_marker_names, 0);
+   buy_zone.sweep_count = 0;
    buy_zone.signal_triggered = false;
    buy_zone.order_placed = false;
    buy_zone.top = 0;
