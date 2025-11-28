@@ -497,17 +497,40 @@ void OnChartEvent(const int id,
       }
    }
    
-   if(id == CHARTEVENT_OBJECT_DRAG)
+   // Update zone when dragged or resized
+   if(id == CHARTEVENT_OBJECT_DRAG || id == CHARTEVENT_OBJECT_ENDEDIT)
    {
       if(sparam == buy_zone.rect_name && buy_zone.is_active && !buy_zone.is_locked)
       {
+         // Cập nhật cả vị trí và kích thước
          buy_zone.top = ObjectGetDouble(0, buy_zone.rect_name, OBJPROP_PRICE, 0);
          buy_zone.bottom = ObjectGetDouble(0, buy_zone.rect_name, OBJPROP_PRICE, 1);
+         
+         // Đảm bảo top > bottom
+         if(buy_zone.top < buy_zone.bottom)
+         {
+            double temp = buy_zone.top;
+            buy_zone.top = buy_zone.bottom;
+            buy_zone.bottom = temp;
+         }
+         
+         Print("📐 BUY Zone updated: Top=", buy_zone.top, " | Bottom=", buy_zone.bottom, " | Size=", (buy_zone.top - buy_zone.bottom)/_Point, " points");
       }
       else if(sparam == sell_zone.rect_name && sell_zone.is_active && !sell_zone.is_locked)
       {
+         // Cập nhật cả vị trí và kích thước
          sell_zone.top = ObjectGetDouble(0, sell_zone.rect_name, OBJPROP_PRICE, 0);
          sell_zone.bottom = ObjectGetDouble(0, sell_zone.rect_name, OBJPROP_PRICE, 1);
+         
+         // Đảm bảo top > bottom
+         if(sell_zone.top < sell_zone.bottom)
+         {
+            double temp = sell_zone.top;
+            sell_zone.top = sell_zone.bottom;
+            sell_zone.bottom = temp;
+         }
+         
+         Print("📐 SELL Zone updated: Top=", sell_zone.top, " | Bottom=", sell_zone.bottom, " | Size=", (sell_zone.top - sell_zone.bottom)/_Point, " points");
       }
    }
 }
@@ -591,10 +614,14 @@ void CreateTradingZone(bool is_buy)
 {
    double current_price = SymbolInfoDouble(_Symbol, SYMBOL_BID);
    
+   // Tạo zone LỚN HƠN để dễ nhìn và dễ kéo (500 points = dễ thấy)
+   double zone_size = 500 * _Point;  // Kích thước mặc định 500 points
+   
    if(is_buy)
    {
-      buy_zone.top = current_price - 100 * _Point;
-      buy_zone.bottom = current_price - 300 * _Point;
+      // BUY zone nằm DƯỚI giá hiện tại
+      buy_zone.top = current_price - 200 * _Point;
+      buy_zone.bottom = buy_zone.top - zone_size;
       buy_zone.original_top = buy_zone.top;
       buy_zone.original_bottom = buy_zone.bottom;
       buy_zone.is_active = true;
@@ -603,12 +630,17 @@ void CreateTradingZone(bool is_buy)
       buy_zone.order_placed = false;
       
       DrawTradingZone(buy_zone);
-      Print("✅ Buy zone created: ", buy_zone.top, " - ", buy_zone.bottom);
+      Print("✅ BUY zone created:");
+      Print("   Top: ", buy_zone.top);
+      Print("   Bottom: ", buy_zone.bottom);
+      Print("   Size: ", zone_size/_Point, " points");
+      Print("   👉 Kéo góc/cạnh để thay đổi kích thước!");
    }
    else
    {
-      sell_zone.top = current_price + 300 * _Point;
-      sell_zone.bottom = current_price + 100 * _Point;
+      // SELL zone nằm TRÊN giá hiện tại
+      sell_zone.bottom = current_price + 200 * _Point;
+      sell_zone.top = sell_zone.bottom + zone_size;
       sell_zone.original_top = sell_zone.top;
       sell_zone.original_bottom = sell_zone.bottom;
       sell_zone.is_active = true;
@@ -617,7 +649,11 @@ void CreateTradingZone(bool is_buy)
       sell_zone.order_placed = false;
       
       DrawTradingZone(sell_zone);
-      Print("✅ Sell zone created: ", sell_zone.top, " - ", sell_zone.bottom);
+      Print("✅ SELL zone created:");
+      Print("   Top: ", sell_zone.top);
+      Print("   Bottom: ", sell_zone.bottom);
+      Print("   Size: ", zone_size/_Point, " points");
+      Print("   👉 Kéo góc/cạnh để thay đổi kích thước!");
    }
 }
 
@@ -639,7 +675,9 @@ void DrawTradingZone(TradingZone &zone)
       ObjectSetInteger(0, name, OBJPROP_COLOR, zone_color);
       ObjectSetInteger(0, name, OBJPROP_FILL, true);
       ObjectSetInteger(0, name, OBJPROP_BACK, false);
-      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, !zone.is_locked);
+      
+      // KEY CHANGE: Cho phép di chuyển và resize khi chưa lock
+      ObjectSetInteger(0, name, OBJPROP_SELECTABLE, !zone.is_locked);  // Có thể chọn để di chuyển/resize
       ObjectSetInteger(0, name, OBJPROP_SELECTED, false);
       ObjectSetInteger(0, name, OBJPROP_HIDDEN, false);
       ObjectSetInteger(0, name, OBJPROP_STYLE, STYLE_SOLID);
@@ -665,30 +703,53 @@ void DrawTradingZone(TradingZone &zone)
          
       if(ObjectCreate(0, label_name, OBJ_TEXT, 0, time_start, zone.top))
       {
-         string label_text = zone.is_buy_zone ? "  🔵 BUY ZONE (Kéo để di chuyển)" : "  🔴 SELL ZONE (Kéo để di chuyển)";
+         string label_text;
          if(zone.is_locked)
-            label_text = zone.is_buy_zone ? "  🔵 BUY ZONE [LOCKED]" : "  🔴 SELL ZONE [LOCKED]";
+         {
+            label_text = zone.is_buy_zone ? "  🔒 BUY ZONE [LOCKED]" : "  🔒 SELL ZONE [LOCKED]";
+         }
+         else
+         {
+            label_text = zone.is_buy_zone ? "  🔵 BUY ZONE [Kéo góc/cạnh để thay đổi kích thước]" : "  🔴 SELL ZONE [Kéo góc/cạnh để thay đổi kích thước]";
+         }
             
          ObjectSetString(0, label_name, OBJPROP_TEXT, label_text);
          ObjectSetInteger(0, label_name, OBJPROP_COLOR, zone_color);
-         ObjectSetInteger(0, label_name, OBJPROP_FONTSIZE, 12);
+         ObjectSetInteger(0, label_name, OBJPROP_FONTSIZE, 10);
          ObjectSetString(0, label_name, OBJPROP_FONT, "Arial Bold");
          ObjectSetInteger(0, label_name, OBJPROP_ANCHOR, ANCHOR_LEFT);
       }
    }
    
    ChartRedraw();
+   
+   if(!zone.is_locked)
+   {
+      Print("💡 ", zone.is_buy_zone ? "BUY" : "SELL", " Zone có thể:");
+      Print("   - Kéo giữa box để DI CHUYỂN");
+      Print("   - Kéo góc/cạnh box để THAY ĐỔI KÍCH THƯỚC");
+      Print("   - Bấm XÁC NHẬN để cố định");
+   }
 }
 
 //+------------------------------------------------------------------+
 void LockTradingZones()
 {
+   bool any_locked = false;
+   
    if(buy_zone.is_active)
    {
       buy_zone.is_locked = true;
       ObjectSetInteger(0, buy_zone.rect_name, OBJPROP_SELECTABLE, false);
       DrawTradingZone(buy_zone);
-      Print("🔒 Buy zone locked at: ", buy_zone.top, " - ", buy_zone.bottom);
+      
+      double zone_size = (buy_zone.top - buy_zone.bottom) / _Point;
+      Print("🔒 BUY Zone LOCKED:");
+      Print("   Top: ", buy_zone.top);
+      Print("   Bottom: ", buy_zone.bottom);
+      Print("   Size: ", zone_size, " points");
+      Print("   ✅ Zone cố định! Sẵn sàng chờ tín hiệu...");
+      any_locked = true;
    }
    
    if(sell_zone.is_active)
@@ -696,15 +757,25 @@ void LockTradingZones()
       sell_zone.is_locked = true;
       ObjectSetInteger(0, sell_zone.rect_name, OBJPROP_SELECTABLE, false);
       DrawTradingZone(sell_zone);
-      Print("🔒 Sell zone locked at: ", sell_zone.top, " - ", sell_zone.bottom);
+      
+      double zone_size = (sell_zone.top - sell_zone.bottom) / _Point;
+      Print("🔒 SELL Zone LOCKED:");
+      Print("   Top: ", sell_zone.top);
+      Print("   Bottom: ", sell_zone.bottom);
+      Print("   Size: ", zone_size, " points");
+      Print("   ✅ Zone cố định! Sẵn sàng chờ tín hiệu...");
+      any_locked = true;
    }
    
-   Alert("✅ Trading zones confirmed and locked!");
+   if(any_locked)
+      Alert("✅ Trading zones confirmed and locked!\nEA sẽ tự động vào lệnh khi có tín hiệu.");
 }
 
 //+------------------------------------------------------------------+
 void UnlockTradingZones()
 {
+   bool any_unlocked = false;
+   
    if(buy_zone.is_active)
    {
       buy_zone.is_locked = false;
@@ -719,6 +790,12 @@ void UnlockTradingZones()
       ObjectDelete(0, "BUY_TP2_LINE");
       ObjectDelete(0, "BUY_TP3_LINE");
       ObjectDelete(0, "BUY_ENTRY_LINE");
+      
+      Print("🔓 BUY Zone UNLOCKED:");
+      Print("   ✏️ Có thể di chuyển và thay đổi kích thước");
+      Print("   👉 Kéo giữa box để di chuyển");
+      Print("   👉 Kéo góc/cạnh để resize");
+      any_unlocked = true;
    }
    
    if(sell_zone.is_active)
@@ -735,9 +812,18 @@ void UnlockTradingZones()
       ObjectDelete(0, "SELL_TP2_LINE");
       ObjectDelete(0, "SELL_TP3_LINE");
       ObjectDelete(0, "SELL_ENTRY_LINE");
+      
+      Print("🔓 SELL Zone UNLOCKED:");
+      Print("   ✏️ Có thể di chuyển và thay đổi kích thước");
+      Print("   👉 Kéo giữa box để di chuyển");
+      Print("   👉 Kéo góc/cạnh để resize");
+      any_unlocked = true;
    }
    
-   Print("🔓 Trading zones unlocked for editing");
+   if(any_unlocked)
+      Alert("✏️ Zones unlocked! Bạn có thể chỉnh sửa lại.");
+   
+   ChartRedraw();
 }
 
 //+------------------------------------------------------------------+
